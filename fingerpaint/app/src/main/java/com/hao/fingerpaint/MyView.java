@@ -100,7 +100,6 @@ public class MyView extends View {
             Bitmap bitmap = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             drawBackground(canvas);
-            drawLines(canvas);
             drawContent(canvas);
 
             // Generate png file from bitmap
@@ -293,6 +292,8 @@ public class MyView extends View {
         mCharacterPath.lineTo(mX, mY);
         mCurrentCharacter.addPath(new Path(mCharacterPath));
         mCharacterPath.reset();
+
+        mLastTouchTime = System.currentTimeMillis();
         mHandler.sendEmptyMessageDelayed(0, DELAY_TIME);
     }
 
