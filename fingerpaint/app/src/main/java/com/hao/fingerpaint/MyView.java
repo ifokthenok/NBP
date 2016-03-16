@@ -39,7 +39,7 @@ public class MyView extends View {
 
     private Handler mHandler = new Handler() {
         public void handleMessage(Message msg) {
-            if (System.currentTimeMillis() - mLastTouchTime > DELAY_TIME) {
+            if (System.currentTimeMillis() - mLastTouchTime > DELAY_TIME/2) {
                 if (mCurrentCharacter != null) {
                     DataManager.getInstance().addCharacter(mCurrentCharacter);
                     mCurrentCharacter = null;
@@ -54,7 +54,9 @@ public class MyView extends View {
     ColorPickerDialog.OnColorChangedListener mColorChangedListener = new ColorPickerDialog.OnColorChangedListener() {
         @Override
         public void colorChanged(int color) {
-            mCharacterPaint.setColor(color);
+            Paint paint = new Paint(mCharacterPaint);
+            paint.setColor(color);
+            mCharacterPaint = paint;
         }
     };
 
@@ -100,7 +102,7 @@ public class MyView extends View {
             Bitmap bitmap = Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(bitmap);
             drawBackground(canvas);
-            drawContent(canvas);
+            drawContent(canvas, false);
 
             // Generate png file from bitmap
             bitmap.compress(Bitmap.CompressFormat.PNG, 0, new FileOutputStream(file));
@@ -182,6 +184,10 @@ public class MyView extends View {
     }
 
     private void drawContent(Canvas canvas) {
+        drawContent(canvas, true);
+    }
+
+    private void drawContent(Canvas canvas, boolean drawCusor) {
 
         ArrayList<Character> characters = DataManager.getInstance().getCharacters();
 
@@ -216,8 +222,8 @@ public class MyView extends View {
                 break;
 
                 case Character.TYPE_PATH: {
-                    RectF rect = c.getBound();
-                    float padding = factor * w / 8.0f;
+                    RectF rect = c.getOriginalBound();
+                    float padding = factor * w / 10.0f;
                     float actualWidth = factor * rect.width() + padding;
                     float widthOffset = padding - factor * rect.left;
                     if (x + actualWidth > w) {
@@ -229,7 +235,7 @@ public class MyView extends View {
                     mContentCanvas.scale(factor, factor);
                     ArrayList<Path> paths = c.getPaths();
                     for (Path path : paths) {
-                        mContentCanvas.drawPath(path, mCharacterPaint);
+                        mContentCanvas.drawPath(path, c.getPaint());
                     }
                     mContentCanvas.restore();
                     x += actualWidth;
@@ -237,6 +243,13 @@ public class MyView extends View {
                 break;
             }
         }
+
+        // Draw cusor
+        mContentCanvas.save();
+        mContentCanvas.translate(x, y);
+        mContentCanvas.scale(factor, factor);
+        mContentCanvas.drawLine(w/4, h/8, w/4, 7*h/8, mCharacterPaint);
+        mContentCanvas.restore();
 
         canvas.drawBitmap(mContentBitmap, 0, 0, mBitmapPaint);
     }
@@ -272,6 +285,7 @@ public class MyView extends View {
         mY = y;
         if (mCurrentCharacter == null) {
             mCurrentCharacter = new Character();
+            mCurrentCharacter.setPaint(mCharacterPaint);
         }
         mLastTouchTime = System.currentTimeMillis();
     }

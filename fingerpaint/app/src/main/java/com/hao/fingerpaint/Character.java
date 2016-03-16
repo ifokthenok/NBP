@@ -1,5 +1,6 @@
 package com.hao.fingerpaint;
 
+import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 
@@ -15,6 +16,7 @@ public class Character {
     private int type;
 
     private RectF bound = new RectF();
+    private Paint paint;
     private ArrayList<Path> paths = new ArrayList<Path>();
 
     public Character(int type) {
@@ -38,7 +40,7 @@ public class Character {
         paths.add(path);
     }
 
-    public RectF getBound() {
+    public RectF getOriginalBound() {
         RectF rect = new RectF();
         for (Path path: paths) {
             RectF r = new RectF();
@@ -49,9 +51,22 @@ public class Character {
             rect.bottom = Math.max(r.bottom, rect.bottom);
         }
         return  rect;
-
     }
 
+    public RectF getBound() {
+        return bound;
+    }
 
+    public void setBound(RectF rect) {
+        bound.set(rect);
+    }
+
+    public Paint getPaint() {
+        return paint;
+    }
+
+    public void setPaint(Paint paint) {
+        this.paint = paint;
+    }
 }
 
