@@ -1,0 +1,115 @@
+commit e57542d194a37ecf1a8f0aff5d9fb58707df7b16
+Author: Yu Hao <hao.yu@connexis.com>
+Date:   Thu Nov 20 10:24:53 2014 +0800
+
+    delete the local reference of lock object to avoid JNI local reference table
+
+diff --git a/core/jni/android_view_Surface.cpp b/core/jni/android_view_Surface.c
+index 1868469..3b2de5c 100644
+--- a/core/jni/android_view_Surface.cpp
++++ b/core/jni/android_view_Surface.cpp
+@@ -99,6 +99,7 @@ sp<Surface> android_view_Surface_getSurface(JNIEnv* env, jobje
+                 env->GetIntField(surfaceObj, gSurfaceClassInfo.mNativeObject));
+         env->MonitorExit(lock);
+     }
++       env->DeleteLocalRef(lock);
+     return sur;
+ }
+
+
+commit 3cd84bc9d5b1b517fcc246019d74fe8844126b18
+Author: Ma Jie <jie.ma@connexis.com>
+Date:   Tue Dec 2 18:16:33 2014 +0800
+
+    ref #8776: fix the issue that mouse/touch do not work on alpine platform
+
+commit 39dc03eeb9d40481c7c02a69c8135d1d433cca2f
+Author: Yu Hao <hao.yu@connexis.com>
+Date:   Wed Dec 3 11:32:39 2014 +0800
+
+    Set the wayland shell surface fullscreen display
+
+diff --git a/gralloc_wayland/wayland_client.c b/gralloc_wayland/wayland_client.c
+index 8d8a8c5..becc0b4 100644
+--- a/gralloc_wayland/wayland_client.c
++++ b/gralloc_wayland/wayland_client.c
+@@ -623,7 +623,9 @@ static struct SWindowData* createWindow() {
+        wl_shell_surface_set_title(window->shellSurface, "YgomiDroid");
+        /// Makes the shell surface top-level.
+        wl_shell_surface_set_toplevel(window->shellSurface);
+-
++       /// Set the shell surface fullscreen display
++       wl_shell_surface_set_fullscreen(window->shellSurface, 
++                       WL_SHELL_SURFACE_FULLSCREEN_METHOD_SCALE, 0, NULL);
+        return window;
+ }
+
+commit 07caa920f34e72792c15b7bdee50490c7dcbfbce
+Author: Ma Jie <jie.ma@connexis.com>
+Date:   Fri Dec 5 13:02:23 2014 +0800
+
+    ref #8799: maintain internal event queue to eliminate duplicate event
+
+commit 2fc2ae197a882ea2e4cd465c5855ea5f73297e49
+Author: Ma Jie <jie.ma@connexis.com>
+Date:   Mon Dec 8 15:21:01 2014 +0800
+
+    Add the support to inject the touch down, up and move events directly instead of tap and swiping method
+
+commit f994c8ffe386361e849862c425026b466258db89
+Author: Ma Jie <jie.ma@connexis.com>
+Date:   Mon Dec 8 15:23:28 2014 +0800
+
+    Fix the issue 8640: Vertical page scrolling in AOSP browser app is not easy; Inject the raw touch event directly to support real-time dragging and swiping
+
+
+commit 9a9b9edd77fe15e0e21747d80653579d747655cc
+Author: yf <yfliu@ygomi.com>
+Date:   Tue Dec 9 10:40:37 2014 +0800
+
+    ref#8850 return empty int[] to reduce upper layer crashing
+
+commit 863105bc4b9747f2304e648025fb5ed3329ff817
+Author: Yu Hao <hao.yu@connexis.com>
+Date:   Tue Dec 9 16:53:47 2014 +0800
+
+    1) Use a seperated thread to dispatch frame callback. 2) Wait buffer avaiable instead of 1 pixel damage. 3) Delete unnecessary files
+
+commit a7814037 in YgomiGit:aosp/platform/frameworks/base for reg#8850
+commit a7814037bd3e7f31d23c3da66161255b8886ca45
+Author: yf <yfliu@ygomi.com>
+Date:   Wed Dec 10 10:52:15 2014 +0800
+
+    ref#8850 make AOSP home app working by harden nonCore service accessing
+
+commit cf07b731a2fc1a5ca9575804e0aa91db5329c6a2 @ packages/apps/Settings
+Author: yf <yfliu@ygomi.com>
+Date:   Wed Dec 10 11:50:15 2014 +0800
+
+    #ref 8850 prevent 'developer options' from crashing
+
+commit 15d2ae140c699d7fae44c3bcb7e63dad01ef48e5
+Author: Yu Hao <hao.yu@connexis.com>
+Date:   Fri Dec 12 16:27:21 2014 +0800
+
+gralloc get display output properties from wl2droid instead of fb0 device
+
+commit 548f7a5a663cfdb734fe59c65791722cf66633f8
+Author: Yu Hao <hao.yu@connexis.com>
+Date:   Mon Dec 15 11:34:22 2014 +0800
+
+    Fix bug: get sys.persist.wl_output.id failed
+
+repo: frameworks/base/ commit: 81cf8409c227ab9691b6
+repo: packages/apps/Settings commit: e32acaf7b2a8d50c
+
+    harden cases when nonCore system services absent
+
+repo: external/wl2droid commit: e25598bbf643516fd72ce392362b081294d9b78c
+    
+    add support for multiple wayland output and refactor some codes
+
+commit 7f9464df85c11dadcf14e0b59cc79da1dc3b903f @ external/wl2droid/
+    fix surface out-of-limit bug using MAX_SF_SIZE=1680x1024
+
+

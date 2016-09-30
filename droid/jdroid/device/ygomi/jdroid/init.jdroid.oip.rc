@@ -1,0 +1,25 @@
+#
+# the init.${ro.hardware}.rc for target device
+# should be installed to target's /init.{ro.hardware}.rc
+on init
+    export EXTERNAL_STORAGE /mnt/sdcard
+    export XDG_RUNTIME_DIR /tmp
+    setprop ro.kernel.qemu 1
+    setprop dalvik.vm.heapsize 64m
+    #setprop debug.sf.nobootanimation 0
+    setprop ro.display.starting.height 78
+
+# start the wayland bridge service
+service wl2droid /system/bin/wl2droid.sh
+    class main
+    user system
+    group graphics
+    oneshot
+
+# start the dnsproxy and wl2droid services
+service dnsproxy2 /system/bin/dnsproxy2 -w 8.8.8.8
+    class main
+    user  root
+    group inet net_raw
+    critical
+
