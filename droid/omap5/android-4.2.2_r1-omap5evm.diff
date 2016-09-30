@@ -1,0 +1,248 @@
+
+project frameworks/base/
+diff --git a/core/java/android/app/ActivityManager.java b/core/java/android/app/ActivityManager.java
+index 594be68..6fdbfb0 100644
+--- a/core/java/android/app/ActivityManager.java
++++ b/core/java/android/app/ActivityManager.java
+@@ -379,6 +379,9 @@ public class ActivityManager {
+      * @hide
+      */
+     static public boolean isHighEndGfx() {
++    	return false;
++		/* [yuhao fix]: return false means not a high end device */
++    	/*
+         MemInfoReader reader = new MemInfoReader();
+         reader.readMemInfo();
+         if (reader.getTotalSize() >= (512*1024*1024)) {
+@@ -398,6 +401,7 @@ public class ActivityManager {
+             return true;
+         }
+         return false;
++        */
+     }
+ 
+     /**
+diff --git a/core/java/android/view/HardwareRenderer.java b/core/java/android/view/HardwareRenderer.java
+index 5b7a5af..e1aa1e5 100644
+--- a/core/java/android/view/HardwareRenderer.java
++++ b/core/java/android/view/HardwareRenderer.java
+@@ -166,7 +166,8 @@ public abstract class HardwareRenderer {
+      * 
+      * @hide
+      */
+-    public static boolean sRendererDisabled = false;
++    /* [yuhao fix]: set as true to disable OpenGL rendering */
++    public static boolean sRendererDisabled = true;
+ 
+     /**
+      * Further hardware renderer disabling for the system process.
+
+project hardware/libhardware/
+diff --git a/modules/gralloc/framebuffer.cpp b/modules/gralloc/framebuffer.cpp
+index 326f2ae..b4dbd83 100644
+--- a/modules/gralloc/framebuffer.cpp
++++ b/modules/gralloc/framebuffer.cpp
+@@ -131,6 +131,71 @@ static int fb_post(struct framebuffer_device_t* dev, buffer_handle_t buffer)
+ }
+ 
+ /*****************************************************************************/
++static void print_fixed_info (struct fb_fix_screeninfo finfo)	
++{  
++	ALOGD ("Frambuffer fixed screen info:\n"	
++			"\tid: %s\n"  
++			"\tsmem_start: 0x%lx\n"  
++			"\tsmem_len: %d\n"	
++			"\ttype: %d\n"	
++			"\ttype_aux: %d\n"	
++			"\tvisual: %d\n"  
++			"\txpanstep: %d\n"	
++			"\typanstep: %d\n"	
++			"\tywrapstep: %d\n"  
++			"\tline_length: %d\n"  
++			"\tmmio_start: 0x%lx\n"  
++			"\tmmio_len: %d\n"	
++			"\taccel: %d\n"  
++			"\n",  
++			finfo.id, finfo.smem_start, finfo.smem_len, finfo.type,  
++			finfo.type_aux, finfo.visual, finfo.xpanstep, finfo.ypanstep,  
++			finfo.ywrapstep, finfo.line_length, finfo.mmio_start,  
++			finfo.mmio_len, finfo.accel);  
++}
++
++static void print_variable_Info (struct fb_var_screeninfo vinfo)  
++{  
++	ALOGD ("Frambuffer variable screen info:\n"  
++			"\txres: %d\n"	
++			"\tyres: %d\n"	
++			"\txres_virtual: %d\n"	
++			"\tyres_virtual: %d\n"	
++			"\tyoffset: %d\n"  
++			"\txoffset: %d\n"  
++			"\tbits_per_pixel: %d\n"  
++			"\tgrayscale: %d\n"  
++			"\tred: offset: %2d, length: %2d, msb_right: %2d\n"  
++			"\tgreen: offset: %2d, length: %2d, msb_right: %2d\n"  
++			"\tblue: offset: %2d, length: %2d, msb_right: %2d\n"  
++			"\ttransp: offset: %2d, length: %2d, msb_right: %2d\n"	
++			"\tnonstd: %d\n"  
++			"\tactivate: %d\n"	
++			"\theight: %d\n"  
++			"\twidth: %d\n"  
++			"\taccel_flags: 0x%x\n"  
++			"\tpixclock: %d\n"	
++			"\tleft_margin: %d\n"  
++			"\tright_margin: %d\n"	
++			"\tupper_margin: %d\n"	
++			"\tlower_margin: %d\n"	
++			"\thsync_len: %d\n"  
++			"\tvsync_len: %d\n"  
++			"\tsync: %d\n"	
++			"\tvmode: %d\n"  
++			"\n",  
++			vinfo.xres, vinfo.yres, vinfo.xres_virtual, vinfo.yres_virtual,  
++			vinfo.xoffset, vinfo.yoffset, vinfo.bits_per_pixel,  
++			vinfo.grayscale, vinfo.red.offset, vinfo.red.length,  
++			vinfo.red.msb_right, vinfo.green.offset, vinfo.green.length,  
++			vinfo.green.msb_right, vinfo.blue.offset, vinfo.blue.length,  
++			vinfo.blue.msb_right, vinfo.transp.offset, vinfo.transp.length,  
++			vinfo.transp.msb_right, vinfo.nonstd, vinfo.activate,  
++			vinfo.height, vinfo.width, vinfo.accel_flags, vinfo.pixclock,  
++			vinfo.left_margin, vinfo.right_margin, vinfo.upper_margin,	
++			vinfo.lower_margin, vinfo.hsync_len, vinfo.vsync_len,  
++			vinfo.sync, vinfo.vmode);  
++} 
+ 
+ int mapFrameBufferLocked(struct private_module_t* module)
+ {
+@@ -160,10 +225,16 @@ int mapFrameBufferLocked(struct private_module_t* module)
+     if (ioctl(fd, FBIOGET_FSCREENINFO, &finfo) == -1)
+         return -errno;
+ 
++	
++
+     struct fb_var_screeninfo info;
+     if (ioctl(fd, FBIOGET_VSCREENINFO, &info) == -1)
+         return -errno;
+ 
++	/* [yuhao fix]: print the fixed and variable info of this fb */
++	print_fixed_info(finfo);
++	print_variable_Info(info);
++
+     info.reserved[0] = 0;
+     info.reserved[1] = 0;
+     info.reserved[2] = 0;
+@@ -183,6 +254,7 @@ int mapFrameBufferLocked(struct private_module_t* module)
+         flags &= ~PAGE_FLIP;
+         ALOGW("FBIOPUT_VSCREENINFO failed, page flipping not supported");
+     }
++	print_variable_Info(info);
+ 
+     if (info.yres_virtual < info.yres * 2) {
+         // we need at least 2 for page-flipping
+diff --git a/modules/gralloc/gralloc.cpp b/modules/gralloc/gralloc.cpp
+index 99aeb01..861c6fe 100644
+--- a/modules/gralloc/gralloc.cpp
++++ b/modules/gralloc/gralloc.cpp
+@@ -232,6 +232,10 @@ static int gralloc_alloc(alloc_device_t* dev,
+     int err;
+     if (usage & GRALLOC_USAGE_HW_FB) {
+         err = gralloc_alloc_framebuffer(dev, size, usage, pHandle);
++		/* [yuhao fix]: stride should be related to framebuffer  */
++		private_module_t* m = reinterpret_cast<private_module_t*>(dev->common.module);
++		stride = m->finfo.line_length * 8 / m->info.bits_per_pixel;
++		
+     } else {
+         err = gralloc_alloc_buffer(dev, size, usage, pHandle);
+     }
+
+project packages/providers/DownloadProvider/
+diff --git a/src/com/android/providers/downloads/DownloadThread.java b/src/com/android/providers/downloads/DownloadThread.java
+index 34bc8e3..b858321 100644
+--- a/src/com/android/providers/downloads/DownloadThread.java
++++ b/src/com/android/providers/downloads/DownloadThread.java
+@@ -284,7 +284,8 @@ public class DownloadThread extends Thread {
+     private void checkConnectivity() throws StopRequestException {
+         // checking connectivity will apply current policy
+         mPolicyDirty = false;
+-
++		/* [yuhao fix] : don't check the connectivity */
++		/*
+         int networkUsable = mInfo.checkCanUseNetwork();
+         if (networkUsable != DownloadInfo.NETWORK_OK) {
+             int status = Downloads.Impl.STATUS_WAITING_FOR_NETWORK;
+@@ -296,8 +297,8 @@ public class DownloadThread extends Thread {
+                 mInfo.notifyPauseDueToSize(false);
+             }
+             throw new StopRequestException(status,
+-                    mInfo.getLogMessageForNetworkError(networkUsable));
+-        }
++                    mInfo.1(networkUsable));
++        }*/
+     }
+ 
+     /**
+diff --git a/src/com/android/providers/downloads/StorageManager.java b/src/com/android/providers/downloads/StorageManager.java
+index 915d141..9046f8f 100644
+--- a/src/com/android/providers/downloads/StorageManager.java
++++ b/src/com/android/providers/downloads/StorageManager.java
+@@ -193,10 +193,12 @@ class StorageManager {
+         }
+         if (destination == Downloads.Impl.DESTINATION_FILE_URI ||
+                 destination == Downloads.Impl.DESTINATION_EXTERNAL) {
++            /* [yuhao fix]: don't check external storage */
++            /*
+             if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
+                 throw new StopRequestException(Downloads.Impl.STATUS_DEVICE_NOT_FOUND_ERROR,
+-                        "external media not mounted");
+-            }
++                        "external media not mounted");
++            }*/
+         }
+         // is there enough space in the file system of the given param 'root'.
+         long bytesAvailable = getAvailableBytesInFileSystemAtGivenRoot(root);
+
+project system/core/
+diff --git a/init/init.c b/init/init.c
+index 1c80d9c..60ace50 100755
+--- a/init/init.c
++++ b/init/init.c
+@@ -132,6 +132,9 @@ static void zap_stdio(void)
+ 
+ static void open_console()
+ {
++	return;
++	/* [yuhao fix]: android don't use linux console */
++	/*
+     int fd;
+     if ((fd = open(console_name, O_RDWR)) < 0) {
+         fd = open("/dev/null", O_RDWR);
+@@ -141,6 +144,7 @@ static void open_console()
+     dup2(fd, 1);
+     dup2(fd, 2);
+     close(fd);
++	*/
+ }
+ 
+ static void publish_socket(const char *name, int fd)
+diff --git a/init/logo.c b/init/logo.c
+index 614224c..ff6d615 100644
+--- a/init/logo.c
++++ b/init/logo.c
+@@ -101,7 +101,6 @@ static int vt_set_mode(int graphics)
+ }
+ 
+ /* 565RLE image format: [count(2 bytes), rle(2 bytes)] */
+-
+ int load_565rle_image(char *fn)
+ {
+     struct FB fb;
+@@ -157,7 +156,8 @@ fail_unmap_data:
+ fail_close_file:
+     close(fd);
+ fail_restore_text:
+-    vt_set_mode(0);
++	/* [yuhao fix]: no need to restore text mode even if failed */
++    /*vt_set_mode(0);*/
+     return -1;
+ }
+ 

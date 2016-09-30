@@ -1,0 +1,53 @@
+
+project hardware/libhardware/
+diff --git a/modules/gralloc/gralloc.cpp b/modules/gralloc/gralloc.cpp
+index a2dec6b..3f54ee8 100644
+--- a/modules/gralloc/gralloc.cpp
++++ b/modules/gralloc/gralloc.cpp
+@@ -230,6 +230,9 @@ static int gralloc_alloc(alloc_device_t* dev,
+     int err;
+     if (usage & GRALLOC_USAGE_HW_FB) {
+         err = gralloc_alloc_framebuffer(dev, size, usage, pHandle);
++		/* [yuhao fix]: stride should be related to framebuffer  */
++		private_module_t* m = reinterpret_cast<private_module_t*>(dev->common.module);
++		stride = m->finfo.line_length * 8 / m->info.bits_per_pixel;
+     } else {
+         err = gralloc_alloc_buffer(dev, size, usage, pHandle);
+     }
+
+project system/core/
+diff --git a/init/init.c b/init/init.c
+index 94a2011..ed55571 100644
+--- a/init/init.c
++++ b/init/init.c
+@@ -125,6 +125,8 @@ static void zap_stdio(void)
+ 
+ static void open_console()
+ {
++	/* [yuhao fix]: android don't use linux console */
++	/*
+     int fd;
+     if ((fd = open(console_name, O_RDWR)) < 0) {
+         fd = open("/dev/null", O_RDWR);
+@@ -134,6 +136,7 @@ static void open_console()
+     dup2(fd, 1);
+     dup2(fd, 2);
+     close(fd);
++    */
+ }
+ 
+ static void publish_socket(const char *name, int fd)
+diff --git a/init/logo.c b/init/logo.c
+index 614224c..98be839 100644
+--- a/init/logo.c
++++ b/init/logo.c
+@@ -157,7 +157,8 @@ fail_unmap_data:
+ fail_close_file:
+     close(fd);
+ fail_restore_text:
+-    vt_set_mode(0);
++	/* [yuhao fix]: no need to restore text mode even if failed */
++    /* vt_set_mode(0); */
+     return -1;
+ }
+ 
