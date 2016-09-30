@@ -14,9 +14,9 @@ int main() {
     string file = "/bin/sh";
     vector<string> args = {"sh", "-c", "sleep 1; read x; echo $x; echo hello err 1>&2; sleep 3"};
 
-    Process process;
-    process.create(file, args, "in.txt", "out.txt", "err.txt");
-    process.dump();
+    Process p1;
+    p1.create(file, args, "in.txt", "out.txt", "err.txt");
+    p1.dump();
 
     vector<string> a2 = {"sh", "-c", "echo hello out > in.txt"};
     Process p2;
@@ -24,12 +24,15 @@ int main() {
     p2.dump();
 
     
-    LOGD("main", "isAlive(): %d", process.isAlive() ? 1 : 0);
+    LOGD("main", "p1.isAlive(): %d", p1.isAlive() ? 1 : 0);
+    LOGD("main", "p2.isAlive(): %d", p2.isAlive() ? 1 : 0);
     sleep(3);
-    LOGD("main", "isAlive(): %d", process.isAlive() ? 1 : 0);
-    process.kill();
+    LOGD("main", "p1.isAlive(): %d", p1.isAlive() ? 1 : 0);
+    LOGD("main", "p2.isAlive(): %d", p2.isAlive() ? 1 : 0);
+    p1.kill();
     sleep(1);
-    LOGD("main", "isAlive(): %d", process.isAlive() ? 1 : 0);
+    LOGD("main", "p1.isAlive(): %d", p1.isAlive() ? 1 : 0);
+    LOGD("main", "p2.isAlive(): %d", p2.isAlive() ? 1 : 0);
     
     return 0;
 }

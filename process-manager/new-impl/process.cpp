@@ -223,11 +223,28 @@ void Process::dump() {
 }
 
 bool Process::isAlive() {
-    return waitpid(pid, NULL, WNOHANG) == 0;
+    if (pid == -1) {
+        return false;
+    }
+    
+    bool alive = waitpid(pid, NULL, WNOHANG) == 0;
+    if (!alive) {
+        //
+        // Child is dead, close related fds.
+        //
+        release();
+        pid = -1;
+    }
+    return alive;
 }
 
 
 bool Process::kill(int signal) {
+    //
+    // NOTES: 
+    // The pid is not reused, because pid is direct child of this process.
+    // Even if the child exited, the pid is reserved (this is what a "zombie process" is) until the parent waits on it
+    //
     if (-1 == ::kill(pid, signal)) {
         LOGE(TAG, "kill failed: %s", strerror(errno));
         return false;
