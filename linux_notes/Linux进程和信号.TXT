@@ -1,0 +1,209 @@
+Linux 进程和信号
+
+1）启动进程（Starting New Processes）
+a. system函数
+#include <stdlib.h>
+int system (const char *string); 	// 启动一个新的进程，并等待其结束
+例如：
+system("ps -ax");									// 启动进程ps 
+system("ps -ax &");								// 启动进程ps（作为守护进程，函数立即返回）
+注：system并不是启动进程理想的方法（因为它使用Shell来启动新进程）
+
+b．替代进程镜像（Replacing a Process Image）
+#include <unistd.h>
+char **environ;
+int execl(const char *path, const char *arg0, ..., (char *)0);
+int execlp(const char *file, const char *arg0, ..., (char *)0);
+int execle(const char *path, const char *arg0, ..., (char *)0, char *const envp[]);
+
+int execv(const char *path, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+int execve(const char *path, char *const argv[], char *const envp[]);
+
+l与v只是传递参数的形式不一样
+p搜索PATH环境变量
+e传递新的环境变量
+exec系列函数不返回（本进程已被新进程替代），发送错误时返回-1
+
+例如：
+char *const ps_argv[] = {“ps”, “-ax”, 0};
+char *const ps_envp[] = {“PATH=/bin:/usr/bin”, “TERM=console”, 0};
+
+execl(“/bin/ps”, “ps”, “-ax”, 0); 						// 假定ps在/bin目录下
+execlp(“ps”, “ps”, “-ax”, 0); 								// 假定/bin在PATH环境变量中
+execle(“/bin/ps”, “ps”, “-ax”, 0, ps_envp); 	// 传递自己的环境 
+
+execv(“/bin/ps”, ps_argv);
+execvp(“ps”, ps_argv);
+execve(“/bin/ps”, ps_argv, ps_envp);
+
+c. 复制进程镜像（Duplicating a Process Image）
+#include <sys/types.h>
+#include <unistd.h>
+pid_t fork(void); 	// 返回-1表失败，返回0代表子进程，否则代表在父进程中
+
+switch(fork()) {
+	case -1 : /* Error */
+		break;
+	case 0 : 	/* We are child */
+		break;
+	default : /* We are parent */
+		break;
+}
+
+d．等待一个进程（Waiting for a Process）
+#include <sys/types.h>
+#include <sys/wait.h>
+pid_t wait(int *stat_loc);　// 等待直到子进程完成，返回子进程ID
+
+stat_loc指示子进程的状态，可使用宏来测试：
+WIFEXITED(stat_val) 	如果子进程正常退出，返回非零（Nonzero if the child is terminated normally)
+WEXITSTATUS(stat_val) 如果WIFEXITED非零，返回退出码（If WIFEXITED is nonzero, this returns child exit code)
+WIFSIGNALED(stat_val) 如果被未知信号中断，返回非零（Nonzero if the child is terminated on an uncaught signal）
+WTERMSIG(stat_val) 		如果WIFSIGNALED非零，返回信号数（If WIFSIGNALED is nonzero, this returns a signal number）
+WIFSTOPPED(stat_val) 	如果子进程已经停止，返回非零（Nonzero if the child has stopped）
+WSTOPSIG(stat_val) 		如果WIFSTOPPED返回非零，返回信息数字（If WIFSTOPPED is nonzero, this returns a signal number）
+
+3）僵尸进程（Zombie Processes）
+以下情况会导致子进程变成僵尸进程：
+如果子进程先于父进程结束，进程表中可能仍保留子进程的相关项（如其退出码，以便父进程调用wait）
+如果父进程异常终止，子进程的PID被设为1, 子进程不再运行.
+
+以下系统调用等待子进程（options常设置为WNOHANG，防止挂起）
+#include <sys/types.h>
+#include <sys/wait.h>
+pid_t waitpid(pid_t pid, int *stat_loc, int options);
+
+4）重定向输入输出（Input and Output Redirection）
+
+// 关闭stream（如果存在），将stream与path指定的文件相关联
+FILE *freopen(const char *path, const char *mode, FILE *stream);
+
+程序upper用于将标准输入转化大写字母并输出，源码如下：
+#include <stdio.h>
+#include <ctype.h>
+int main()
+{
+	int ch;
+	while((ch = getchar()) != EOF) {
+		putchar(toupper(ch));
+	}
+	exit(0);
+}
+
+程序useupper源码如下：
+#include <unistd.h>
+#include <stdio.h>
+int main(int argc, char *argv[])
+{
+	char *filename;
+	if (argc != 2) {
+		fprintf(stderr, “usage: useupper file\n”);
+		exit(1);
+	}
+	
+	filename = argv[1];
+	if(!freopen(filename, “r”, stdin)) { 	// 关闭stdin, stdin现在关联filename
+		fprintf(stderr, “could not redirect stdin from file %s\n”, filename);
+		exit(2);
+	}
+	execl(“./upper”, “upper”, 0);   			// 用户upper替代当前进程
+	
+	perror(“could not exec ./upper”);
+	exit(3);
+}
+
+输出：
+$ cat file.txt
+this is the file, file.txt, it is all lower case.
+$ ./upper < file.txt
+THIS IS THE FILE, FILE.TXT, IT IS ALL LOWER CASE.
+$ ./useupper file.txt
+THIS IS THE FILE, FILE.TXT, IT IS ALL LOWER CASE.
+
+5）信号
+信号的产生来源：内存越界，浮点错误，无效指令，终端中断，一个进程发送到别一个进程...
+如果进程接收一个信号,却未捕获,进程将终止（一般会在当前目录下产生一个dump文件core）
+
+常见信号：
+--------------------------------------------------------------------------------
+SIGABORT  进程终止（*Process abort）
+SIGALRM 	报警时钟（Alarm clock）
+SIGFPE 		浮点异常（*Floating-point exception）
+SIGHUP 		挂起（Hangup）
+SIGILL 		无效指令（*Illegal instruction）
+SIGINT 		终端中断（Terminal interrupt）
+SIGKILL 	杀死（Kill，can’t be caught or ignored)
+SIGPIPE 	写管道却没有读者（Write on a pipe with no reader）
+SIGQUIT 	终端退出T（terminal quit）
+SIGSEGV 	访问无效内存（*Invalid memory segment access）
+SIGTERM 	终止(Termination)
+SIGUSR1 	用户定义信号1（User-defined signal 1）
+SIGUSR2 	用户定义信号2（User-defined signal 2）
+
+其它信号：
+--------------------------------------------------------------------------------
+SIGCHLD 	子进程已停止或退出（Child process has stopped or exited）
+SIGCONT 	如果停止，继续执行（Continue executing, if stopped）
+SIGSTOP 	停止执行（Stop executing. (Can’t be caught or ignored)
+SIGTSTP 	终端停止信号（Terminal stop signal）
+SIGTTIN 	后台进程读（Background process trying to read）
+SIGTTOU 	后台进程写（Background process trying to write）
+
+处理信号的函数：
+#include <signal.h>
+void (*signal(int sig, void (*func)(int)))(int);
+
+signal返回一个函数指针，func可指定以下值：
+SIG_IGN 	忽略此信号（Ignore the signal）
+SIG_DFL 	恢复缺省行为（Restore default behavior）
+
+示例程序：处理CTRL+C
+#include <signal.h>
+#include <stdio.h>
+#include <unistd.h>
+void ouch(int sig)
+{
+	printf(“OUCH! - I got signal %d\n”, sig);
+	(void) signal(SIGINT, SIG_DFL);  	// 恢复缺省行为
+}
+
+int main()
+{
+  (void) signal(SIGINT, ouch);
+	while(1) {
+		printf(“Hello World!\n”);
+		sleep(1);
+	}
+}
+
+输出：
+$ ./ctrlc1
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+^C
+OUCH! - I got signal 2
+Hello World!
+Hello World!
+Hello World!
+Hello World!
+^C
+$
+
+
+6）发送信号（Sending Signals）
+#include <sys/types.h>
+#include <signal.h>
+int kill(pid_t pid, int sig); 						 // 向进程发送信号
+unsigned int alarm(unsigned int seconds);  // senconds秒后产生一个SIGALRM信号
+int pause(void);													 // 暂停当前进程
+
+更健状的信号接口：
+#include <signal.h>
+int sigaction(int sig, const struct sigaction *act, struct sigaction *oact);
+sigaction结构体至少包括：
+void (*) (int) sa_handler 	// function, SIG_DFL or SIG_IGN
+sigset_t sa_mask					 	// sa_handler不处理的信号集合（signals to block in sa_handler）
+int sa_flags 								// signal action modifiers

@@ -1,0 +1,192 @@
+Linux 环境
+
+1. getopt 
+相关函数或全局变量
+extern char *optarg;
+extern int optind;
+extern int opterr;
+extern int optopt;
+
+int getopt(int argc, char * const argv[],
+          const char *optstring);
+int getopt_long(int argc, char * const argv[],
+          const char *optstring,
+          const struct option *longopts, int *longindex);
+int getopt_long_only(int argc, char * const argv[],
+          const char *optstring,
+          const struct option *longopts, int *longindex);
+
+测试宏：
+getopt(): _POSIX_C_SOURCE >= 2 || _XOPEN_SOURCE
+getopt_long(), getopt_long_only(): _GNU_SOURCE
+
+详细参考linux man手册页
+
+注：
+1) argc, argv一般为main函数参数，短选项以'-'开头，长选项以'--'开头
+2) optind是argv中下一个待处理元素的索引，初始值为1（设置为１时可重新调用getopt来解析参数）
+3) getopt每发现一个选项字符，返回此选项字符，更新内部静态变量nextchar以便继续调用。
+   无选项字符发现时, getopt返回-1, 此时optind指向第一个非选项参数
+4) optstring语法：　
+   选项字符后1个':'表示选项要求一个选项值，optarg指向那个选项值
+   选项字符后2个':'表示可选选项，只有-o<value>这种写法下，optarg指向选项值，否则optarg为NULL, （此特性为GNU扩展）
+　  选项字符包括'W;', -W foo当作长选项--foo处理。（此特性为GNU扩展，glibc2中不可用）   
+5) 缺省情况下，getopt会改变argv的内容，这样所有非选项参数都排在后面
+   如果optstring以'+'开头或设置了POSIXLY_CORRECT，则遇到非选项参数便停止
+ 　如果optstring以'-'开头, 则非选项参数初当作字符选项１的选项值处理（这适用于某些应用，其参数顺序可任意）
+6) getopt发现非法选项时，会在stderr上打印错错误，optopt保存非法选项字符，返回'?'. 设置opterr为0可阻止打印错误
+7) getopt返回值:
+   选项字符，如果有效选项发现
+　　　-1,  如果选项已解析完
+　　　'?', 如果发现在非法选项
+　　　':', 如果选项没有选项值, 注意：如果optstring开头不包括':', 则返回'?'
+
+8) getopt_long和getopt_long_only中参数longopts为option数组，最后一个元素为０
+    struct option {
+        const char *name;       // 长选项名（不包括'--'）
+        int        has_arg;     // 
+        int        *flag;       // NULL，函数返回值为val, 非NULL, 函数返回０，*flag设置为val
+        int        val;         // 作为函数的返回值，或*flag设置为此值
+    };
+9) 若longindex不为NULL, *longindex表示longopts数组索引
+10) getopt_long和getopt_long_only返回值：
+　　  发现短选项，返回短选项字符
+　　  发现长选项，返回0或val
+　　　 其它返回同getopt（注意到getopt_long/getopt_long_only也包括optstring参数）
+
+
+2 环境变量（Environment Variables）
+#include <stdlib.h>
+char *getenv(const char *name);		// 获取环境变量name, 返回其值或-1表示不存在
+int putenv(const char *string);		// 设置环境变量（string格式：name=value）, 返回-1表示失败
+注：环境变量的改变仅局限于进程内部，不会影响其它进程
+环境变量的使用（假定程序为cdapp，其引用了环境变量CDDB）：
+$ CDDB=mycds; export CDDB
+$ cdapp
+或者：
+$ CDDB=mycds cdapp
+
+程序的环境变量由格式为name=value的一系列字符串组成的（由外部变量environ指向）
+#include <stdlib.h>
+#include <stdio.h>
+extern char **environ;
+int main()
+{
+	char **env = environ;
+	while(*env) {
+		printf(“%s\n”,*env);
+		env++;
+	}
+	exit(0);
+}
+Linux/Unix下env命令可显示环境变量，Windows下set具有类似功能。
+
+3 时间和日期（Time and Date）
+#include <time.h>
+time_t time(time_t *tloc); 										// 返回至1970年1月1日午夜起到现在所经历的时长（秒数）
+double difftime(time_t time1, time_t time2); 	// 返回time1 - time2
+struct tm *gmtime(const time_t timeval);      // 依据GMT转化为tm结构体
+struct tm *localtime(const time_t *timeval);	// 依据local时区转化为tm结构体
+time_t mktime(struct tm *timeptr);						// tm转化为时长
+更多信息参考Beginning Linux Programing(3rd Edition)
+
+
+4 临时文件（Temporary Files）
+char *tmpnam(char *s);					// 产生临时文件, 返回文件名，如果s不为空，文件名也写入s
+FILE *tmpfile(void);						// 产生临时文件, 返回文件流（可避免产生同名文件）
+char *mktemp(char *template);   // template最后6个字符必须是XXXXXX（用于被替代, 老版本的Unix支持)
+int mkstemp(char *template);		// 返回文件描述符（可避免产生同名文件，老版本的Unix支持）
+示例程序：
+#include <stdio.h>
+int main()
+{
+	char tmpname[L_tmpnam];
+	char *filename;
+	FILE *tmpfp;
+	filename = tmpnam(tmpname);			
+	printf(“Temporary file name is: %s\n”, filename);
+	tmpfp = tmpfile();
+	if(tmpfp)
+	printf(“Opened a temporary file OK\n”);
+	else
+	perror(“tmpfile”);
+	exit(0);
+}
+
+5 用户信息（User Information）
+所有Linux进程(除了init), 都是由用户或者程序启动的
+uid_t getuid(void);				// 启动本进程的用户ID（UID）
+gid_t getgid(void);				// 启动本进程的用户组ID（GID）
+int setuid(uid_t uid);		// 设置UID（要求超级用户根限）
+int setgid(gid_t gid);		// 设置GID（要求超级用户根限）
+char *getlogin(void);			// 获取启动本进程的用户的用户名
+
+说明：/etc/passwd包括用户的账户信息
+
+struct passwd *getpwuid(uid_t uid);							// 依据用户ID获取passwd
+struct passwd *getpwnam(const char *name);			// 依据用户名获取passwd
+
+passwd结构成员：
+char *pw_name 	用户登陆名(The user’s login name)
+uid_t pw_uid 		用户ID（The UID number)
+gid_t pw_gid 		组ID（The GID number)
+char *pw_dir 		主目录（The user’s home directory)
+char *pw_gecos 	用户全名(The user’s full name)
+char *pw_shell 	缺少Shell(The user’s default shell)
+
+struct passwd *getpwent(void);      // 每调用一次返回一个passwd, 返回NULL表示结束
+void endpwent(void);								// 终止调用
+void setpwent(void);								// 重置
+
+6. 主机信息（Host Information）
+int gethostname(char *name, size_t namelen);  // 获取主机网络名
+long gethostid(void);                         // 获取主机ID
+int uname(struct utsname *name);							// 获取更详细的主机信息
+
+utsname结构成员：
+char sysname[] 	操作系统名（The operating system name）
+char nodename[] 主机名（The host name）
+char release[] 	系统发布级别（The release level of the system）
+char version[] 	系统版本（The version number of the system）
+char machine[] 	硬件类型（The hardware type）
+
+8）日志（Logging）
+系统日志一般放在/var/log/目录下（依据各系统不同而有所不同）
+void syslog(int priority, const char *message, arguments...); // 写系统日志
+priority：优先级 |  发起者（Facility）
+优先级：LOG_EMERG（紧急）、LOG_ERR，LOG_WARING, LOG_DEBUG.
+消息发起者：LOG_USER, LOG_LOCAL0, LOG_LOCAL1..
+其它参数用法与printf一样（使用%m表示当前错误消息，参考errno）
+
+9）资源和限制（Resources and Limits）
+// 获取CPU时间
+// rusage: 结构体包括：用户时间和系统时间
+// who: RUSAGE_SELF(当前进程)， RUSAGE_CHILDREN（也包括子进程）
+int getrusage(int who, struct rusage *r_usage);
+
+// 获取优先级（-20 到 +20， 缺省为0，负数代表高优先级）
+// which: PRIO_PROCESS(who是PID), PRIO_PGRP(who是GID)， PRIO_USER（who是UID）
+// who: 依which而定
+int getpriority(int which, id_t who);	
+
+// 设置优先级
+int setpriority(int which, id_t who, int priority);
+
+// 获取限制
+// resource：表示资源
+		RLIMIT_CORE 		The core dump file size limit, in bytes
+		RLIMIT_CPU 			The CPU time limit, in seconds
+		RLIMIT_DATA 		The data () segment limit, in bytes
+		RLIMIT_FSIZE 		The file size limit, in bytes
+		RLIMIT_NOFILE 	The limit on the number of open files
+		RLIMIT_STACK 		The limit on stack size, in bytes
+		RLIMIT_AS The 	limit on address space (stack and data), in bytes
+// rlimit结构（rlim_t为整数）
+		rlim_t rlim_cur 软限制数（The current, soft limit）
+		rlim_t rlim_max 硬限制数（The hard limit）
+int getrlimit(int resource, struct rlimit *r_limit);
+
+// 使用资源时，超过软限制会引起库函数失败，超过硬限制会引起程序终止
+// 设置限制（软限制可更改，硬限制可减小）
+int setrlimit(int resource, const struct rlimit *r_limit);
+

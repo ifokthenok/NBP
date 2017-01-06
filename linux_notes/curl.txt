@@ -1,0 +1,37 @@
+1. cURL Overview 
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+官网: http://curl.haxx.se/
+cURL主要包括一个命令行工具curl和libcurl API
+
+
+2. libcurl API
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+主要以c语言开发，支持（c++/java/python/ruby....）语言binding
+手册：http://curl.haxx.se/libcurl/c/libcurl-tutorial.html
+例子：http://curl.haxx.se/libcurl/c/example.html
+libcurl有两种编程接口：　
+Easy interface: 同步接口，使用简单，一般够用了
+Multi interface: 异步接口，支持多传输（通过１至多个线程），参考http://curl.haxx.se/libcurl/c/libcurl-multi.html）
+Easy interface使用步骤：
+1) 初始化：
+curl_global_init(CURL_GLOBAL_ALL);	// 全局初始化（如创建socket等）
+curl_handle = curl_easy_init();		// Session初始化
+2) 设置选项：
+curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);	// 设置URL选项
+curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);		// 设置CURLOPT_VERBOSE选项便于调试
+curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_callback);	// 设置接收回调函数（见注）
+curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, user_arg);				// 设置接收回调时的用户参数
+curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, header_call);		// 设置接收Header数据回调（有些协议有Header）
+curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, user_arg); 			// 设置header回调时的用户参数
+3) 执行：
+curl_easy_perform(curl_handle);			// 执行一次（如执行一次HTTP请求／应答)
+4) 获取执行信息：
+curl_easy_getinfo(curl_handle,... );	// 执行完后可获取执行信息（如返回码等）
+5) 清理：
+curl_easy_cleanup(curl_handle);			// 清理Session
+
+注：回调函数原型：size_t write_callback(char* buffer, size_t size, size_t nitems, void *userdata)
+其中：buffer-接收的数据，size-每项数据尺寸，nitems -数据项，userdata-用户数据
+也就是说，可从buffer接收size*nitems字节的数据，
+返回值必须为：size*nitems，否则会报错。
+

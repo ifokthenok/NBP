@@ -1,0 +1,264 @@
+1. DBus Overview
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+参考：https://pythonhosted.org/txdbus/dbus_overview.html
+1）DBus是一种进程间通信IPC或远程过程调用RPC机制，它使用一个逻辑上的“总线”，应用程序间通过总线相互通信.
+应用程序间的通信方式基于对象（Object）。DBus中每个对象的名字通过总线名(Bus name)和路径名（Path name）
+唯一标识。Bus Name —— 标识应用程序，Path Name —— 标识某个对象（看起来像文件系统路径）
+
+
+2）DBus接口定义了对象支持的方法（methods）和信号（signals）, 其参数或返回值的类型, 基于字符串表示如下：
+  ----------------------------------------------------------------
+    Character 	Code Data Type
+  ----------------------------------------------------------------
+    y           8-bit unsigned integer
+    b           boolean value
+    n           16-bit signed integer
+    q           16-bit unsigned integer
+    i           32-bit signed integer
+    u           32-bit unsigned integer
+    x           64-bit signed integer
+    t           64-bit unsigned integer
+    d           double-precision floating point (IEEE 754)
+    s           UTF-8 string (no embedded nul characters)
+    o           D-Bus Object Path string
+    g           D-Bus Signature string
+    a           Array
+    (           Structure start
+    )           Structure end
+    v           Variant type (described below)
+    {           Dictionary/Map begin
+    }           Dictionary/Map end
+    h           Unix file descriptor
+  ----------------------------------------------------------------
+  
+ DBus方法可接受任意数量的参数和任意数量的返回值，即使方法调用未指定返回值，"method return"消息仍旧发送给调用者
+ 这可帮助应用程序判断方法调用是否完成。仅当方法调用时设置了"no reply expected" 标识时才不会收到"method return"消息。
+  
+ DBus信号提供了一对多，订阅－发布机制，近似于方法返回值，信号可包含任意数量的数据。与方法不同的是，信号完全异步的，并
+ 且任何时候可被对象忽略。缺省情况下，DBus对象发出的信号不会发给任何客户端，为接受信号，客户端应用必须显示的注册它们感
+ 兴趣的DBus信号
+  
+  
+3）代理（Proxies）
+代理对象，顾名思义，就是与DBus对象有相同接口的本进程内的对象
+不使用代理时，编程代码看起来如：
+Message message = new Message("/remote/object/path", "MethodName", arg1, arg2);
+Connection connection = getBusConnection();
+connection.send(message);
+Message reply = connection.waitForReply(message);
+if (！reply.isError()) {
+    Object returnValue = reply.getReturnValue();
+} else {
+    // Do error handing
+}
+使用代理的，伪代码看起来像：
+Proxy proxy = new Proxy(getBusConnection(), "/remote/object/path");
+Object returnValue = proxy.MethodName(arg1, arg2);
+  
+4）总线名（Bus Names）
+ 有两种总线名: unique和well-known.
+ Unique总线名 —— DBus在应用客户端连接时分配给应用的全局唯一的名字以冒号开头（如:34-907）
+ Well-know名  —— 应用程序为提供服务而请求DBus的分配的友好名(如com.mycompany.TextEditor)
+ (应用程序应该有一个对象/com/mycompany/TextFileManager支持接口org.freedesktop.FileHandler)
+ 
+注：区别对象名，接口名，总线名
+对象名一般由/连接组成，如：/org/kde/kspread/sheets/3/cells/4/5， 
+一个对象可支持多个接口，接口名一般由.连接，如：org.freedesktop.Introspectable
+
+5）消息路由（Message Routing）
+主要有四种类型的消息：
+方法调用消息：请求调用某个对象的某个方法
+方法返回消息：返回方法调用结果
+错误消息：返回调用方法引起的异常
+信号消息：通知某个信号已经发出
+ 
+消息通过目的地址和匹配规则路由到客户端。
+目的地址路由一般用于当消息的目的参数包括一个unique或well-know总线名的情况（例如方法调用－返回建立了1对1通信）
+信号是没有目的地址的广播消息，客户应用必须注册匹配规则来接受感兴趣的信号。
+
+6）总线地址（DBus Addresses）
+总线地址指定了连接机制（TCP， Unix Socket等）和额外信息，总线地址的格式：<transport-name>:<key1>=<value1>,<key2>=<value2>
+多个总线地址可在同一个串指定，通过分号；分隔
+Unix地址使用unix作为<transport-name>
+----------------------------------------------------------------
+Key 	    Values
+----------------------------------------------------------------
+path        Filesystem path of the socket
+tmpdir      Temporary directory in which a randomly named socket file with a dbus- prefix will be created.
+abstract    Name of an abstract unix socket
+----------------------------------------------------------------
+
+TCP地址使用tcp作为<transport-name> 
+----------------------------------------------------------------
+Key 	    Values
+----------------------------------------------------------------
+host        DNS name or IP address
+port        Port number
+family      "ipv4" or "ipv6"
+----------------------------------------------------------------
+
+注：将应用程序使用DBus时，或者作为一个客户端或者作为一个服务端。服务端监听进来的连接，客户端连接服务。
+如果使用DBus Deamon（后台守护进程）, 你的应用程序将作为DBus Deamo的客户端，也就是DBus Deamo监听你应用程序的连接。
+DBus地址指定了服务端监听描述符，如地址：unix:path=/tmp/abcdef 指定服务端在/tmp/abcdef处监听一个Unix Socket
+libdbus通过读取配置文件自动发现每个DBus Daemon，它通过查找一个公用的Unix Socket路径来发现系统范围内的DBus Deamon
+(可以在环境变量中改变这个地址)，很少情况下，你可能不需要DBus Deamon, 可以自定义哪个应用服务端，那个应用是客户端。
+
+为了指定某个对象的某个方法，一系列内嵌的组件必须指定其名字：
+Address -> [Bus Name] -> Path -> Interface -> Method
+其中：
+Bus Name是可选的，当使用DBus Daemon时，提供Bus Name用于路由'方法调用'到正确的应用端。
+如果直接建立到另一个应用程序，此时无须指定Bus Name, 因为没有DBus Damemo参与
+Interface其实也是可选的（主要为兼容历史遗留）, 只要避免同一个对象内方法不同名即可。
+
+
+7)标准接口(具体参阅文档)
+org.freedesktop.DBus.Peer：
+Ping()              测试连接是否active
+GetMachineId()      返回一个16进制的UUID代表进程运行的机器
+
+org.freedesktop.DBus.Introspectable
+Introspect()
+
+org.freedesktop.DBus.Properties:
+Get(interface_name, property_name)
+Set(interface_name, property_name, value)
+GetAll(interface_name)
+PropertiesChanged
+
+2. dbus-daemon
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+dbus-daemon [--version ] [--session ] [--system ] [--config-file=FILE] [ --print-address [=DESCRIPTOR]] [ --print-pid [=DESCRIPTOR]] [--fork ] [--nofork]
+--version       显示版本信息
+--session       等同于--config-file=/usr/local/etc/dbus-1/session.conf" 
+--system        等同于--config-file=/usr/local/etc/dbus-1/system.conf". 
+--config-file   指定配置文件
+--print-address 打印dbus-daemon的地址到标准输出或到指定的描述符
+--print-pid     打印dbus-daemon进程的id到标准输出或到指定的描述符
+--fork          强制fork并成为守护进程（忽略config中的指定）
+--nofork        与--fork相反（忽略config中的指定）
+--address[=ADDRESS] 指定监听ADDRESS
+注：dbus-daemon启动读取的配置文件为XML格式，如下是一个例子
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>                                     // 根元素(必须滴)
+   <type>system</type>                          // 类型：system或session
+   <auth>EXTERNAL</auth>                        
+   <listen>unix:path=/dev/socket/dbus</listen>  // 监听地址
+   <policy context="default">                   
+      <allow send_interface="*"/>
+      <allow receive_interface="*"/>
+      <allow own="*"/>
+      <allow user="*"/>
+      <allow send_requested_reply="true"/>
+      <allow receive_requested_reply="true"/>
+    </policy>
+</busconfig>
+
+
+3. dbus-specification
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+参考：http://dbus.freedesktop.org/doc/dbus-specification.html
+1) 字节序和对齐（Byte order and alignment）
+dbus数据格式的字节序(little-endian，big-endian)由消息Header指定, 对齐方式一般为自然对齐：也就是说
+４byte值对齐边界为４(地址为４的整数倍), 8byte的值对齐边界为8, 但Struct和Dictionary对齐边界为8
+
+2) 基本类型Marshalling
+a.基本类型
+整数用补码形式表示，Double以IEEE 754表示
+b.字符串类型
+编码：字符串长度n + 字符串　＋　一个null字符
+对齐：以表示的长度为对齐边界，即n用几字节表示，对齐边界就为几
+s    UTF-8 string(n用4字节编码，对齐边界为4) 
+o    D-Bus Object Path string(n用4字节编码，对齐边界为4)
+g    D-Bus Signature string(n用１字节编码，对齐边界为1)
+c.容器类型：
+Array:      A UINT32 giving the length of the array data in bytes, followed by alignment padding to the 
+            alignment boundary of the array element type, followed by each array element.
+Struct:     A struct must start on an 8-byte boundary regardless of the type of the struct fields. 
+            The struct value consists of each field marshaled in sequence starting from that 8-byte alignment boundary. 
+Dictionary: 等同于Struct
+Variant:    变量表示的具体类型的签名 + 具体类型的值
+
+3) Message协议
+Message协议　＝　Header + Body
+Header必须是8字节对的倍数(可能有0-7字节的0填充), Body并不要求8字节的倍数。
+Message转发系统依照Header信息计算出消息发往何处以及怎么样解释Body中的数据。
+Body则由零到多个参数组成，这参数由Header中的Signature来决定。
+Header的签名格式:
+    "yyyyuua(yv)"
+依次表达的是:
+    BYTE, BYTE, BYTE, BYTE, UINT32, UINT32, ARRAY of STRUCT of (BYTE,VARIANT)
+这些值的意义：
+1st BYTE	Endianness标志; 'l' 表示little-endian　或　'B' 表示big-endian（header和body必须都是以这种字节序）
+2nd BYTE	Messag类型, 如下表(Unknow类型必须忽略)
+3rd BYTE	Bitwise OR of flags (Unknown flags必须忽略)
+4th BYTE	发送应用的Major版本号，如果接受应用不匹配，则不能用于dbus通信，当前版本为１
+1st UINT32	消息Body的长度（除去Header的长度）
+2nd UINT32	消息序号，作为一个cookie, 用于标识发送请求的回复
+ARRAY of STRUCT of (BYTE,VARIANT)	一个结构数组表示的零和多个Header field, 其中BYTE表示field Code, VARIANT表示field value
+
+Message类型（2nd BYTE）：
+----------------------------------------------------------------
+名称    (十进制)值　意义
+----------------------------------------------------------------
+INVALID	        0	无效类型
+METHOD_CALL	    1	Method call.
+METHOD_RETURN	2	Method reply with returned data.
+ERROR	        3	Error reply(如果第一个参数存在且为一个sting,则它是一个error消息)
+SIGNAL	        4	Signal emission.
+----------------------------------------------------------------
+  
+Message Flags（3nd BYTE）：
+----------------------------------------------------------------
+名称        (十六进制)值　意义
+----------------------------------------------------------------
+NO_REPLY_EXPECTED	0x1	不期望Method reply和Error reply(但返回reply是兼容的)　
+NO_AUTO_START	    0x2	不会自动启动（The bus must not launch an owner for the destination name in response to this message）
+----------------------------------------------------------------
+
+Header fileds
+----------------------------------------------------------------
+名称	    十进制值	    类型          　要求             描述
+----------------------------------------------------------------
+INVALID	    0	    N/A	            不允许          无效field (如果出现在message中则会导致error)
+PATH	    1	    OBJECT_PATH	　　METHOD_CALL　　 对象路径（/org/freedesktop/DBus/Local保留）
+                                    和SIGNAL
+INTERFACE	2	    STRING	        SIGNAL	        接口（方法调用可选，信号必须，org.freedesktop.DBus.Local保留）
+MEMBER	    3	    STRING	        METHOD_CALL
+                                    和SIGNAL	        成员（方法或信号名）
+ERROR_NAME	4	    STRING	        ERROR	        Error名称（主要用于Error reply）The name of the error that occurred, for errors
+REPLY_SERIAL5	    UINT32	        ERROR           Message回复序号
+                                    和METHOD_RETURN	
+DESTINATION	6	    STRING	        可选            连接名称（总线名称）
+SENDER	    7	    STRING	        可选            发送连接的Unique名称（即总线Unique名称）
+SIGNATURE	8	    SIGNATURE	    可选            Message Body的签名（如果省略，则为"", 此时Body长度必须为零）
+UNIX_FDS	9	    UINT32	        可选            Unix文件描述符
+----------------------------------------------------------------
+
+3) 有效的名字
+bus名、interface名、和member名的最大长度为255
+a.接口名（Interface names）
+类型: STRING
+要求：
+由１个或多个element通过.连接而成，每个element至少包含一个字符
+每个element由[A-Z][a-z][0-9]_组成，并且不能以数字开头
+接口名至少包含一个.
+
+b. 总线名（Bus names）
+一个连接拥有一个Unique总线名(存在于Connection的整个lifetime)，类型STRING
+要求：
+以:开头的是Unique总线名，其它为Well-known总线名
+Bus名由一至多个由.分隔的element组成，每个element至少包含一个字符
+每个element由[A-Z][a-z][0-9]_组成（仅unique名以数字开头）
+Bus名至少包含一个.(也就是至少有两个element)
+
+c.成员名（Member names），即method和signal名
+要求：
+由[A-Z][a-z][0-9]_组成，并且不能以数字开头
+不能包含'.'字符
+至少１byte长度
+
+d.错误名（Error names）
+要求：同接口名(一般包含.Error, 如com.example.MusicPlayer.Error.FileNotFound或com.example.MusicPlayer.Error.OutOfMemory）
+
+

@@ -1,0 +1,439 @@
+-----------------------------------googlemock基本应用-----------------------------------
+0.官方网站
+	http://code.google.com/p/googlemock/ 
+1.写模拟类（Writing the Mock Class）
+  1）声明需要模拟的类
+  class Turtle {
+	  ...
+	  virtual ~Turtle();
+	  virtual void PenUp() = 0;
+	  virtual void PenDown() = 0;
+	  virtual void Forward(int distance) = 0;
+	  virtual void Turn(int degrees) = 0;
+	  virtual void GoTo(int x, int y) = 0;
+	  virtual int GetX() const = 0;
+	  virtual int GetY() const = 0;
+	};
+	2)利用gmock的宏实现接口
+	#include <gmock/gmock.h>  // Brings in Google Mock.
+	class MockTurtle : public Turtle {
+	  ...
+	  MOCK_METHOD0(PenUp, void());
+	  MOCK_METHOD0(PenDown, void());
+	  MOCK_METHOD1(Forward, void(int distance));
+	  MOCK_METHOD1(Turn, void(int degrees));
+	  MOCK_METHOD2(GoTo, void(int x, int y));
+	  MOCK_CONST_METHOD0(GetX, int());
+	  MOCK_CONST_METHOD0(GetY, int());
+	};
+	MOCK_METHODn宏实现n个参数函数(不包括返回值)
+	MOCK_CONST_METHODn宏实现n个参数的常函数(不包括返回值)
+	一般可将上述声明及实现放在一个头文件中(如： mock_turtle.h)
+2.在测试中使用模拟类（Using Mocks in Tests）
+	#include "mock-turtle.h"
+	#include <gmock/gmock.h>
+	#include <gtest/gtest.h>
+	using ::testing::AtLeast;                     // #1 从testing命名空间中导入需要用到的模拟名称
+	
+	TEST(PainterTest, CanDrawSomething) {
+	  MockTurtle turtle;                          // #2 构造模拟对象
+	  EXPECT_CALL(turtle, PenDown())              // #3 指定调用期望（调用多少次？每次传入的参数是什么？每次调用的行为（如返回值）是什么？）
+	      .Times(AtLeast(1));
+	
+	  Painter painter(&turtle);                   // #4 使用模拟对象 
+	
+	  EXPECT_TRUE(painter.DrawCircle(0, 0, 10));  // #5 应用gtest断言
+	}                                             
+	
+	int main(int argc, char** argv) {
+	  // The following line must be executed to initialize Google Mock
+	  // (and Google Test) before running the tests.
+	  ::testing::InitGoogleMock(&argc, argv);
+	  return RUN_ALL_TESTS();
+	}
+3.设置期望（Setting Expectations）
+	1）一般语法（General Syntax）
+	EXPECT_CALL(mock_object, method(matchers))
+    .Times(cardinality)
+    .WillOnce(action)
+    .WillRepeatedly(action);
+  2）matchers ----匹配器。期望传入什么参数？（What Arguments Do We Expect?）
+  using ::testing::_;          				// 匹配任意参数
+	...
+	EXPECT_CALL(turtle, Forward(_));
+	
+	using ::testing::Ge;				 				// 匹配大于等于某值的参数
+	...
+	EXPECT_CALL(turtle, Forward(Ge(100)));
+	3）cardinality ----基数。期望被调用多少次?（How Many Times Will It Be Called?）
+	Times() 子句可以省略。 如果省略，gmock会按以下规则推导调用次数
+	a. 如果WillOnce和WillRepeatedly都不存在，调用次数为Times(1);
+	b. 如果存在n >= 1个WillOnce，但不存在WillRepeatedly，调用次数为Times(n);
+	c. 如果存在n >= 0个WillOnce，存在1个WillRepeatedly，调用次数为Times(AtLeast(n));
+  4）action	----行为：应该做什么（如：返回值是什么, 是否抛出异常，是否调用其它函数）？（What Should It Do?）
+  如：
+  Return(value)返回value值
+  ReturnRef(variable)返回变量variable的引用
+  ...
+  5）使用多个期望（Using Multiple Expectations）
+  using ::testing::_;...
+	EXPECT_CALL(turtle, Forward(_));  // #1
+	EXPECT_CALL(turtle, Forward(10))  // #2
+	    .Times(2);
+	以上定义了两个调用期望。默认情况下，当一个函数被调用时gmock反向搜索期望。如果Forward(10)调用了3次，那么第3次调用
+	时期望#2会发生上界溢出（upper-bound-violated）错误，如果第3次调用是Forward(20)则不会出现此类错误（因为期望#1将与期匹配）。
+	6）有序与无序调用（Ordered vs Unordered Calls）
+	如果希望所有的调用有序发生，可按以下方式来写：
+	using ::testing::InSequence;...
+	TEST(FooTest, DrawsLineSegment) {
+	  ...
+	  {
+	    InSequence dummy;
+	
+	    EXPECT_CALL(turtle, PenDown());
+	    EXPECT_CALL(turtle, Forward(100));
+	    EXPECT_CALL(turtle, PenUp());
+	  }
+	  Foo();
+	}
+	7）所用期望是粘性的（All Expectations Are Sticky）
+	粘性主要体现在以下两方面：
+	a. 函数参数的匹配方面----反序匹配，如GoTo(0, 0)调用3次会发生错误
+	using ::testing::_;...
+	EXPECT_CALL(turtle, GoTo(_, _))  // #1
+	    .Times(AnyNumber());
+	EXPECT_CALL(turtle, GoTo(0, 0))  // #2
+	    .Times(2);
+  b. 函数行为匹配方面----只与最后一次期望相匹配,如GetX()第1次返回10, 以后每次返回缺省值0
+  using ::testing::Return;
+	...
+	for (int i = n; i > 0; i--) {
+	  EXPECT_CALL(turtle, GetX())
+	      .WillOnce(Return(10*i));
+	}
+	如何使期望变得非粘性呢? 方法是增加RetiresOnSaturation()子句
+	using ::testing::Return;
+	...
+	for (int i = n; i > 0; i--) {
+	  EXPECT_CALL(turtle, GetX())
+	    .WillOnce(Return(10*i))
+	    .RetiresOnSaturation();
+	}
+	由于gmock反向搜索期望匹配，较清晰的代码如下：
+	using ::testing::InSequence;
+	using ::testing::Return;
+	...
+	{
+	  InSequence s;
+	
+	  for (int i = 1; i <= n; i++) {
+	    EXPECT_CALL(turtle, GetX())
+	        .WillOnce(Return(10*i))
+	        .RetiresOnSaturation();
+	  }
+	}
+-----------------------------------googlemock高级应用-----------------------------------
+4.创建模拟类（Creating Mock Classes）
+	1）模拟重载函数（Mocking Overloaded Methods）
+	由于重载函数依据参数可区分，因此调用期望的写法同样遵循一般规则
+	class Foo {
+	  ...
+	
+	  // Must be virtual as we'll inherit from Foo.
+	  virtual ~Foo();
+	
+	  // Overloaded on the types and/or numbers of arguments.
+	  virtual int Add(Element x);
+	  virtual int Add(int times, Element x);
+	
+	  // Overloaded on the const-ness of this object.
+	  virtual Bar& GetBar();
+	  virtual const Bar& GetBar() const;
+	};
+
+	class MockFoo : public Foo {
+	  ...
+	  MOCK_METHOD1(Add, int(Element x));
+	  MOCK_METHOD2(Add, int(int times, Element x);
+	
+	  MOCK_METHOD0(GetBar, Bar&());
+	  MOCK_CONST_METHOD0(GetBar, const Bar&());
+	};
+	2）模拟类模板（Mocking Class Templates）
+	只需在MOCK_*后面添加_T即可, 如下：
+	template <typename Elem>
+	class StackInterface {
+	  ...
+	  // Must be virtual as we'll inherit from StackInterface.
+	  virtual ~StackInterface();
+	
+	  virtual int GetSize() const = 0;
+	  virtual void Push(const Elem& x) = 0;
+	};
+	
+	template <typename Elem>
+	class MockStack : public StackInterface<Elem> {
+	  ...
+	  MOCK_CONST_METHOD0_T(GetSize, int());
+	  MOCK_METHOD1_T(Push, void(const Elem& x));
+	};
+	3）模拟自由函数（Mocking Free Functions）
+	将其封装成一个模拟类。
+	4）好的或严的模拟（Nice Mocks and Strict Mocks）
+	如果一个模拟的方法，没有EXPECT_CALL期望，gmock输出警告（"uninteresting call" warnings）
+	a.好的模拟（Nice Mocks），阻止警告
+	b.严的模拟（Strict Mocks），输出错误
+	使用很简单：
+	// using ::testing::StrictMock;
+	using ::testing::NiceMock;
+	
+	TEST(...) {
+	  // NiceMock<MockFoo> mock_foo;
+	  NiceMock<MockFoo> mock_foo;
+	  EXPECT_CALL(mock_foo, DoThis());
+	  ...
+	}
+	5）简化接口（Simplifying the Interface without Breaking Existing Code）
+	有时模拟一个有很多参数的函数f1很繁烦， 可在模拟类中实现此函数的代码用另一个参数少的函数f2取代之，然后写f2的期望
+	6）模拟具体类（Mocking Concrete Classes）
+	可利用Invoke(object_pointer, &class::method)行为来实现
+5.使用匹配器
+	1)转换匹配器（Casting Matchers）
+	可利用SafeMatcherCast<T>(m)或MatcherCast<T>(m），后者只需T可以static_castg转换到m的类型即可
+  2）选择重载函数（Selecting Between Overloaded Functions）
+  class MockFoo : public Foo {
+	  ...
+	  MOCK_METHOD0(GetBar, Bar&());
+	  MOCK_CONST_METHOD0(GetBar, const Bar&());
+	};
+	...
+
+  MockFoo foo;
+  Bar bar1, bar2;
+  EXPECT_CALL(foo, GetBar())         // The non-const GetBar().
+      .WillOnce(ReturnRef(bar1));
+  EXPECT_CALL(Const(foo), GetBar())  // The const GetBar().
+      .WillOnce(ReturnRef(bar2));
+   3）依据参数执行不同行为（Performing Different Actions Based on the Arguments）
+    // if foo.DoThis() is called with a value less than 5, 'a' will be returned; otherwise 'b' will be returned
+	  
+	  // The default case.
+	  EXPECT_CALL(foo, DoThis(_))
+	      .WillRepeatedly(Return('b'));
+	      
+	  // The more specific case.
+	  EXPECT_CALL(foo, DoThis(Lt(5)))
+	      .WillRepeatedly(Return('a'));
+	  
+	  4）匹配多个参数作为一个整体匹配（Matching Multiple Arguments as a Whole）
+	  // says that the first argument of InRange() must not be 0, and must be less than the second argument
+    EXPECT_CALL(foo, InRange(Ne(0), _))
+    		.With(Lt());
+    		
+    // says that Blah() will be called with arguments x, y, and z where x < y < z
+		EXPECT_CALL(foo, Blah(_, _, _))
+		     .With(AllOf(Args<0, 1>(Lt()), Args<1, 2>(Lt())));
+		5）使用匹配来判定（Using Matchers as Predicates）
+		使用Matches(m)函数即可
+		std::vector<int> v; 
+		... 
+		// How many elements in v are >= 10? 
+		const int count = count_if(v.begin(), v.end(), Matches(Ge(10)));
+		6）在断言中使用匹配(Using Matchers in Google Test Assertions)，也就是断言匹配
+		ASSERT_THAT(value, matcher);  // Asserts that value matches matcher. 
+	  EXPECT_THAT(value, matcher);  // The non-fatal version.
+		7）使用判定来匹配（Using Predicates as Matchers)
+		使用Truly(m)函数即可， 参数m为一无判定函数或函数对象，例子：
+		int IsEven(int n) { return (n % 2) == 0 ? 1 : 0; } 
+		... 
+		// Bar() must be called with an even number. 
+		EXPECT_CALL(foo, Bar(Truly(IsEven)));
+		8）匹配不可复制的参数（Matching Arguments that Are Not Copyable）
+		通过匹配
+		// Expects that Foo()'s argument == bar. 
+  	EXPECT_CALL(mock_obj, Foo(Eq(ByRef(bar))));
+		9）验证对象的成员（Validating a Member of an Object）
+		当匹配函数的某个参数是类的对象时, 我们验证对象的成员即可，例子：
+		Field(&Foo::number, Ge(3))  							Matches x where x.number >= 3.  
+		Property(&Foo::name, StartsWith("John "))  Matches x where x.name() starts with "John ".  
+		10）验证指针参数所指的值（Validating the Value Pointed to by a Pointer Argument）
+		// expects foo.Bar() to be called with a pointer that points to a value greater than or equal to 3.
+		EXPECT_CALL(foo, Bar(Pointee(Ge(3))));
+		11）测试对象的某种属性（Testing a Certain Property of an Object）
+		验证对象的某两个成员之间具有某种关系(如成员m1，m2之间应该满足m1 + m2 = const)
+		12）匹配容器（Matching Containers）
+		当匹配函数的参数是STL容器时，验证容器包含什么元素等
+		13）共享匹配（Sharing Matchers）
+		例子如下，实质上gmock内部使用Matcher<T>模板来表示一个匹配器
+		Matcher<int> in_range = AllOf(Gt(5), Le(10)); 
+  	... use in_range as a matcher in multiple EXPECT_CALLs ...
+6.设置期望（Setting Expectations）
+	1）忽略不感兴趣的调用（Ignoring Uninteresting Calls）
+	不感觉兴趣的调用可通过DefaultValue<T>::Set()或ON_CALL()设置缺省行为
+	2）不期望的调用（Disallowing Unexpected Calls）
+	  EXPECT_CALL(foo, Bar(_)) 
+      .Times(0);
+  3）期望完全有序调用（Expecting Ordered Calls）
+  使用InSequence dumb;即可
+  4）期望部分有序（Expecting Partially Ordered Calls）
+  使用Sequence s1, s2，...,即可 
+  5）控制何时期望引退（Controlling When an Expectation Retires）
+  使用Sequence进行控制，如下例子(各期望调用次数为1，只要#2或#3匹配，#1将引退)
+    Sequence s1, s2; 
+ 
+	  EXPECT_CALL(log, Log(WARNING, _, "File too large."))     // #1 
+	      .Times(AnyNumber()) 
+	      .InSequence(s1, s2); 
+	  EXPECT_CALL(log, Log(WARNING, _, "Data set is empty."))  // #2 
+	      .InSequence(s1); 
+	  EXPECT_CALL(log, Log(WARNING, _, "User not found."))     // #3 
+	      .InSequence(s2);   
+7.使用行为（Using Actions）
+	1）返回引用（Returning References from Mock Methods）
+	使用ReturnRef(val)即可
+	2）组合行为（Combining Actions）
+	3）模拟边界效应（Mocking Side Effects）
+	4）设置返回类型的缺省值（Setting the Default Value for a Return Type）
+	  Bar default_bar; 
+	  // Sets the default return value for type Bar. 
+	  DefaultValue<Bar>::Set(default_bar); 
+	  
+	  MockFoo foo; 
+	  foo.CalculateBar();  // This should return default_bar. 
+	  // Unsets the default return value. 
+	  DefaultValue<Bar>::Clear();
+	4）设置模拟方法的缺省行为（Setting the Default Actions for a Mock Method）
+	  ON_CALL(foo, Sign(_)) 
+      	.WillByDefault(Return(-1)); 
+	  ON_CALL(foo, Sign(0)) 
+	      .WillByDefault(Return(0)); 
+	  ON_CALL(foo, Sign(Gt(0))) 
+	      .WillByDefault(Return(1)); 
+	 
+	  EXPECT_CALL(foo, Sign(_)) 
+	      .Times(AnyNumber()); 
+	 
+	  foo.Sign(5);   // This should return 1. 
+	  foo.Sign(-9);  // This should return -1. 
+	  foo.Sign(0);   // This should return 0.
+	5）使用函数、方法、函数对象作为行为（Using Functions/Methods/Functors as Actions）
+	   使用Invoke(f)即可, f为模拟函数相同签名的函数或函数对象
+	6）无参数调用函数、方法、函数对象（Invoking a Function/Method/Functor Without Arguments）
+	   当我们不关心模拟函数的参数时，可使用nvokeWithoutArgs(f), f不带参数，返回类型与模拟函数相同
+	7）调用模拟函数的一个参数（Invoking an Argument of the Mock Function）
+		 当模拟函数的参数是一个函数指针时
+		 // Invoke the mock function's N-th (0-based) argument, which must be a function or a functor, with the k arguments
+		 InvokeArgument<N>(arg1, arg2, ..., argk）
+	8）忽略函数的结果（Ignoring an Action's Result）
+		 IgnoreResult(a) Perform action a and ignore its result. a must not return void. 
+	9）选择行为的参数（Selecting an Action's Arguments）
+		 WithArgs<N1, N2, ..., Nk>(a) Pass the selected (0-based) arguments of the mock function to action a and perform it
+	10）在行为函数中忽略参数（Ignoring Arguments in Action Functions)
+	   可使用Unused来占位
+	11）共享行为（Sharing Actions）
+		 如同Matcher, 实质上gmock内部使用Action<T>模板来表示行为
+		 Action<bool(int*)> set_flag = DoAll(SetArgumentPointee<0>(5), Return(true));
+8.使用GoogleMock的各种其它准则（Misc Recipes on Using Google Mock)
+	1）强制验证（Forcing a Verification ）
+		 利用此函数判断mock_object是否清除（返回bool） ::VerifyAndClearExpectations(&mock_object):
+	2）使用验证点（Using Check Points）
+		 实质上是利用InSequence s来做到的
+	3）模拟析构函数（Mocking Destructors）
+	   在析构函数中调用另一模拟函数，设置另一模拟函数的期望即可
+	4）使用Gook Mock在多线程中（Using Google Mock and Threads ）
+	5）控制Google Mock输出信息（Controlling How Much Information Google Mock Prints）
+	可通过命令行参数--gmock_verbose=LEVEL来控制
+	info: 输出所有警告、错误、以及对ON_CALL/EXPECT_CALL调用的信息
+	warning: 输出所有警告、错误. 
+	error: 仅输出错误  
+	6）在Emacs中运行测试（Running Tests in Emacs） 
+	7）精简Google Mock源文件（Fusing Google Mock Source Files）
+9.扩展Google Mock（Extending Google Mock）
+
+附1: 设置期望的语法
+	  宏EXPECT_CALL()设置一个模拟方法的期望, 其语法如下：
+		EXPECT_CALL(mock_object, method(matchers)) 
+		    .With(multi_argument_matcher)  ? 
+		    .Times(cardinality)            ? 
+		    .InSequence(sequences)         * 
+		    .After(expectations)           *
+		    .WillOnce(action)              *
+		    .WillRepeatedly(action)        ? 
+		    .RetiresOnSaturation();        ?
+		说明：
+		1）每人子句以"."开头，所有子句均可省略
+		2）"?"子句只能出现一次， "*"子句可出现多次, 各子句必须依次出现(如果子句未省略的话), 不充许出现
+		   的情况如：WillOnce出现在After前面(如果After子句也存在的话)
+		3）mock_object 						----模拟对象
+			 method									----模拟对象的方法
+			 matchers								----方法的各参数匹配器,  期望每个参数满足什么样的条件
+			 multi_argument_matcher	----方法的参数之间的匹配器, 期望各个参数之间应满足什么样的条件
+			 Times									----方法的调用次数，期望调用多少次
+			 action									----方法的行为，指定调用方法时产生的行为（如返回值等于多少，是否抛出异常等）
+		4）InSequence、After、RetiresOnSaturation子句是针对多个EXPECT_CALL()来说的, 即针对多个期望的顺序来说的
+			 I)InSequence的例子（指定A必须在B、C之前调用，C必须在D之前调用）
+				 Sequence s1, s2; 
+				 EXPECT_CALL(foo, A()) 
+					  .InSequence(s1, s2); 
+				 EXPECT_CALL(bar, B()) 
+					  .InSequence(s1); 
+				 EXPECT_CALL(bar, C()) 
+					  .InSequence(s2); 
+				 EXPECT_CALL(foo, D()) 
+					  .InSequence(s2);
+			 II)After子句的例子：
+			 例子1说明Bar必须在InitX, InitY之后调用
+			  using ::testing::Expectation; 
+				... 
+				Expectation init_x = EXPECT_CALL(foo, InitX()); 
+				Expectation init_y = EXPECT_CALL(foo, InitY()); 
+				EXPECT_CALL(foo, Bar()) 
+				    .After(init_x, init_y);
+			 例子2说明Bar必须在InitElement(0), InitElement(1), ..., InitElement(element_count)之后调用
+			  using ::testing::ExpectationSet; 
+				... 
+				ExpectationSet all_inits; 
+				for (int i = 0; i < element_count; i++) { 
+				  all_inits += EXPECT_CALL(foo, InitElement(i)); 
+				} 
+				EXPECT_CALL(foo, Bar()) 
+				    .After(all_inits);
+			 III)RetiresOnSaturation子句（直译：一旦饱和便退出）
+			 可以这样理解：
+			 a. 期望有两种状态：激活与非激活状态。
+			 b. 期望一经指定后便处于非激活状态，当期望条件满足时（称期望达到饱和），
+			 c. 增加RetiresOnSaturation子句使得一旦期望达到饱和，便将其置于非激活状态。
+			 d. 没有RetiresOnSaturation子句的情况下, 期望将一直处于激活状态
+			 e. 实质上RetiresOnSaturation子句是针对同一个函数的多个期望而言的。对于不同函数的期望而言
+			    此子句并无意义
+			 
+附2: 注意事项
+		以下摘自gmock源码头文件gmock-spec-builders.h中的说明, 其语法与上述附录1有出入
+     
+		// Google Mock - a framework for writing C++ mock classes.
+		//
+		// This file implements the ON_CALL() and EXPECT_CALL() macros.
+		//
+		// A user can use the ON_CALL() macro to specify the default action of
+		// a mock method.  The syntax is:
+		//
+		//   ON_CALL(mock_object, Method(argument-matchers))
+		//       .WithArguments(multi-argument-matcher)
+		//       .WillByDefault(action);
+		//
+		//  where the .WithArguments() clause is optional.
+		//
+		// A user can use the EXPECT_CALL() macro to specify an expectation on
+		// a mock method.  The syntax is:
+		//
+		//   EXPECT_CALL(mock_object, Method(argument-matchers))
+		//       .WithArguments(multi-argument-matchers)
+		//       .Times(cardinality)
+		//       .InSequence(sequences)
+		//       .WillOnce(action)
+		//       .WillRepeatedly(action)
+		//       .RetiresOnSaturation();
+		//
+		// where all clauses are optional, .InSequence() and .WillOnce() can
+		// appear any number of times, and .Times() can be omitted only if
+		// .WillOnce() or .WillRepeatedly() is present.

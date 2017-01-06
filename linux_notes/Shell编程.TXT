@@ -1,0 +1,1169 @@
+Linux Shell 编程
+
+1）变量
+#!/bin/sh						// #为行注释符（#!指示用/bin/sh来执行本脚本）
+myvar=“Hi there”    // 变量大小写敏感，类型默认为字符串，含空格的字符串需加双引号，等号两边不能有空格
+echo $myvar					// $myvar表示变量myvar的值
+echo “$myvar”				// 双引号内的$myvar用myvar的值替换
+echo ‘$myvar’       // 单引号内的$myvar不替换
+echo \$myvar				// 字符$用\$表示
+echo Enter some text
+read myvar          // 从终端读取一个值赋给myvar
+echo ‘$myvar’ now equals $myvar
+exit 0              // 返回退出码0，可用于测试其成功执行与否
+
+输出：
+Hi there
+Hi there
+$myvar
+$myvar
+Enter some text
+Hello World
+$myvar now equals Hello World
+
+注：shell可以识别4种不同类型的引字符号: 
+单引号字符'		--当shell碰到第一个单引号时，它忽略掉其后直到右引号的所有特殊字符
+双引号字符"		--括在双引号中的三种特殊字符不被忽略：$,\,` 
+反斜杠字符\		--反斜杠一般用作转义字符，或作为续行（在分几行输入长命令时经常使用）
+反引号字符`		--命令替换：把shell命令用反引号或者$(...)结构括起来，其中，$(...)格式受到POSIX标准支持，也利于嵌套。
+
+
+2）环境变量\参数变量
+$HOME   当前用户的home目录（如：/home/yuhao）
+$PATH   命令或可执行文件的路径（用冒号分隔的目录列表）
+$SHELL  当前shellk路径
+$UID	当前用户ID,若为0表示为root用户
+$PS1    命令提示符（例如大多数的缺省提示符[\u@\h \W]$提示[用户@机器名 当前目录]$）
+$PS2    第二个提示符（例如>提示附加输入）
+$IFS    输入域分隔符列表（空格, Tab, 换行符）
+$0 	    此脚本的名称
+$# 		传递给脚本的参数个数（$1, $2, ...分别表示参数1, 参数2，...注：不包括$0）
+$$ 		运行此脚本的进程ID
+$*      所有参数（不包括$0, 参数之间的分隔符由环境变量IFS的第1个分隔字符决定
+$@      与$*类似，但不使用IFS环境变量（区别如下例）
+$?		脚本（或命令，或函数）返回值
+$!      最后一个后台进程ID
+
+$ IFS=’’            // 将IFS置为空
+$ set foo bar bam   // 详见5）命令一节中关于set命令的使用
+$ echo “$@”         // 由于不使用IFS，其输出为：foo bar bam
+$ echo “$*”         // 使用了IFS，其输出为：foobarbam
+$ unset IFS
+$ echo “$*”         // 输出为：foo bar bam
+
+#!/bin/sh
+salutation=”Hello”
+echo $salutation
+echo “The program $0 is now running”
+echo “The second parameter was $2”
+echo “The first parameter was $1”
+echo “The parameter list was $*”
+echo “The user’s home directory is $HOME”
+echo “Please enter a new greeting”
+read salutation
+echo $salutation
+echo “The script is now complete”
+exit 0
+输出：
+$ ./try_var foo bar baz
+Hello
+The program ./try_var is now running
+The second parameter was bar
+The first parameter was foo
+The parameter list was foo bar baz
+The user’s home directory is /home/rick
+Please enter a new greeting
+Sire
+Sire
+The script is now complete
+$
+
+注：
+pgrep make 							// 获取make进程的ID
+cat /proc/1000/environ	// 查看ID为1000的进程的环境变量
+export VARIABLE					// 导出用户变量或环境变量
+
+
+3）测试条件
+a. test和[命令是等价的（不同的是[命令后应跟]符号使其可读性好，test命令很少使用，容易与你的脚本或可执行
+   文件同名，产生混淆）
+   
+b. 语法如同：
+if [ 条件 ]              // 注：[是命令，其前后必须有空格
+then
+...
+fi
+
+或者
+if [ 条件 ]; then       // 如果把then写在同一行，需加分号
+...
+fi
+
+c. 可测试的条件
+字符串比较：
+string1  = string2   // string1与string2相等时返回True
+string1 != string2   // string1与string2相等时返回True
+-n string            // string不为空时返回TrueTrue if the string is not null.
+-z string 				   // string为空时返回True
+
+算术比较
+expression1 -eq expression2 如果expression1 == expression2返回True
+expression1 -ne expression2 如果expression1 != expression2返回True
+expression1 -gt expression  如果expression1 >  expression2返回True
+expression1 -ge expression2 如果expression1 >= expression2返回True
+expression1 -lt expression2 如果expression1 <  expression2返回True
+expression1 -le expression2 如果expression1 <=  expression2返回True
+! expression                如果expression为False，返回True
+
+文件比较
+-d file 如果file是目录返回True
+-e file 如果file存在返回True（-e选项不具可移植性，所以-f选项更常用）
+-f file 如果file是一个regular文件
+-r file 如果file可读返回True
+-w file 如果file可写返回True
+-x file 如果file可执行返回True
+-s file 如果file长度不为0返回True
+-g file True if set-group-id is set on file.
+-u file True if set-user-id is set on file.
+
+#!/bin/sh
+if [ -f /bin/bash ]
+then
+echo “file /bin/bash exists”
+fi
+if [ -d /bin/bash ]
+then
+echo “/bin/bash is a directory”
+else
+echo “/bin/bash is NOT a directory”
+fi
+
+注： 字符串比较时，单个方框号的写法容易出错，一般用双方框号: [[ 字符串测试条件 ]]
+
+
+4）控制结构
+a. if、elif语句
+
+if [ 条件 ]; then
+	statements1
+else
+	statements2
+fi
+
+或者
+if [ 条件 ]; then
+	statements1
+elif [ 条件 ]; then
+	statements2
+else
+	statements3
+fi
+
+#!/bin/sh
+echo “Is it morning? Please answer yes or no”
+read timeofday             
+if [ $timeofday = “yes” ]  // 注：此处应改为if [ “$timeofday” = “yes” ]
+then                       // 如果用户直接回车此句变为 if [  = “yes” ] 将导致错误语法
+                           // echo -n 可阻止换行echo -n “Is it morning? Please answer yes or no: “
+echo “Good morning”        // 也可解决此问题
+elif [ $timeofday = “no” ]; then
+echo “Good afternoon”
+else
+echo “Sorry, $timeofday not recognized. Enter yes or no”
+exit 1
+fi
+exit 0
+
+b.for语句
+for variable in values    // values为字符串集合，可以简单地列出所有字符串，也可以是
+do                        // 文件通配符(如*.txt)
+	statements
+done
+
+注：values可以是$IFS分隔符指定的列表，如IFS=,时可写成：
+for i in x,y,z; do
+	echo $i
+done
+此外还有C风格的for语句：
+	for((i=0; i<10; i++)); do
+		echo $i
+	done
+以及如下形式的for语句：
+	for i in {1..100}; do
+		echo $i
+	done
+
+#!/bin/sh
+for foo in bar fud 43
+do
+echo $foo
+done
+exit 0
+输出：
+bar
+fud
+43
+
+#!/bin/sh
+for file in $(ls f*.sh); do
+lpr $file
+done
+exit 0
+
+c.while语句
+while [ 条件 ]; do
+	statements
+done
+
+#!/bin/sh
+foo=1
+while [ “$foo” -le 20 ]
+do
+echo “Here we go again”
+foo=$(($foo+1))                 // 注$(( ))是算术转换符
+done
+exit 0
+
+d. until语句（与while语句一样，只不过是条件为True时不再执行）
+until [ 条件 ]
+do
+	statements
+done
+
+e.cas语句(从上向下仅执行找到的第1个匹配的模式后的语句)
+case variable in
+pattern [ | pattern] ...) statements;;
+pattern [ | pattern] ...) statements;;
+...
+esac
+
+注：statements可以是多条语句，最后一条语句必须是双分号结尾;
+
+#!/bin/sh
+echo “Is it morning? Please answer yes or no”
+read timeofday
+case “$timeofday” in
+	yes) echo “Good Morning”;;
+	no ) echo “Good Afternoon”;;
+	y  ) echo “Good Morning”;;
+	n  ) echo “Good Afternoon”;;
+	*  ) echo “Sorry, answer not recognized”;;
+esac
+exit 0
+
+#!/bin/sh
+echo “Is it morning? Please answer yes or no”
+read timeofday
+case “$timeofday” in
+	yes | y | Yes | YES )
+		echo “Good Morning”
+		echo “Up bright and early this morning”
+		;;
+	[nN]*)
+		echo “Good Afternoon”
+		;;
+	*)
+		echo “Sorry, answer not recognized”
+		echo “Please answer yes or no”
+		exit 1
+	;;
+esac
+exit 0
+
+f.And与Or表达式
+
+statement1 && statement2 && statement3 && ...
+注：And表达式从左往右，执行到statementi返回False为止statementi后面的语句不会执行
+
+statement1 || statement2 || statement3 || ...
+注：OR表达式从左往右，执行到statementi返回True为止，statementi后面的语句不会执行
+
+#!/bin/sh
+touch file_one
+rm -f file_two
+if [ -f file_one ] && echo “hello” && [ -f file_two ] && echo “ there”
+then
+	echo “in if”
+else
+	echo “in else”
+fi
+exit 0
+输出:
+hello
+in else
+
+
+#!/bin/sh
+rm -f file_one
+if [ -f file_one ] || echo “hello” || echo “ there”
+then
+	echo “in if”
+else
+	echo “in else”
+fi
+exit 0
+输出:
+hello
+in if
+
+And和OR表达式可组合使用，使用{}来表示语句块（Statement Blocks）例如：
+get_confirm && {
+	grep -v “$cdcatnum” $tracks_file > $temp_file
+	cat $temp_file > $tracks_file
+	echo
+	add_record_tracks
+}
+
+
+4）函数
+function_name () {
+	statements
+}
+
+#!/bin/sh
+
+yes_or_no() {
+echo “Is your name $* ?”
+while true
+do
+	echo -n “Enter yes or no: “
+	read x
+	case “$x” in
+		y | yes ) return 0;;
+		n | no ) return 1;;
+		* ) echo “Answer yes or no”
+	esac
+done
+}
+
+echo “Original parameters are $*”
+if yes_or_no “$1”; then
+	echo “Hi $1, nice name”
+else
+	echo “Never mind”
+fi
+exit 0
+输出：
+$ ./my_name Rick Neil
+Original parameters are Rick Neil
+Is your name Rick ?
+Enter yes or no: yes
+Hi Rick, nice name
+$
+
+5）命令（Commands）
+脚本中执行的命令分内部命令（internal）和外部命令（external）
+外部命令: 一般命令提示符中输入的命令
+内部命令：Shell内部执行的命令，不能作为外部程序执行
+下面依次介绍一此常见的命令：
+break, :, continue, ., echo, eval, exec, exit, export, expr, printf, return, 
+set, shift，trap，unset，
+
+a. break命令跳出当前循环（for, while, until）
+break n 表示跳出其外n层循环（不建议使用，降低了可读性）
+
+#!/bin/sh
+rm -rf fred*
+echo > fred1
+echo > fred2
+mkdir fred3
+echo > fred4
+for file in fred*
+do
+	if [ -d “$file” ]; then
+		break;
+	fi
+done
+echo first directory starting fred was $file
+rm -rf fred*
+exit 0
+
+b. （分号）:命令
+:命令是一个空(null)命令, 可看作true的别名，但比True更有效(:为内部命令)，while : 表示一个无限循环.
+:也可用于变量的条件设置
+: ${var:=value} // 此外如果没有: Shell将对$var求值
+
+#!/bin/sh
+rm -f fred
+if [ -f fred ]; then
+:
+else
+echo file fred did not exist
+fi
+exit
+
+c. continue命令（继续当前循环）
+同样continue n 跳出n层内嵌循环继续执行，不建议使用
+#!/bin/sh
+rm -rf fred*
+echo > fred1
+echo > fred2
+mkdir fred3
+echo > fred4
+for file in fred*
+do
+if [ -d “$file” ]; then
+echo “skipping directory $file”
+continue
+fi
+echo file is $file
+done
+rm -rf fred*
+exit 0
+
+d. 点(.)命令
+注：一般而言，当脚本中执行外部命令或调用外部脚本的时候，系统会创建一个新的执行环境（subshell). 
+外部命令或脚本执行后返回到当前执行环境（parent shell）. 因此，如果外部命令或脚本改变了环境
+变量，那么环境变量的改变对当前Shell并不起作用.
+
+使用.命令使得外部命令或脚本在当前shell下执行，如：
+. ./shell_script   // 脚本shell_script会在当前Shell环境下执行
+
+假定当前目录下有两个脚本classic_set和latest_set分别用于设置两个不同的开发环境
+classic_set脚本内容：
+#!/bin/sh
+version=classic
+PATH=/usr/local/old_bin:/usr/bin:/bin:.
+PS1=”classic> “
+
+classic_set脚本内容：
+#!/bin/sh
+version=latest
+PATH=/usr/local/new_bin:/usr/bin:/bin:.
+PS1=” latest version> “
+
+现在，我们可以使用.命令来调用脚本
+$ . ./classic_set
+classic> echo $version
+classic
+classic> . latest_set
+latest version> echo $version
+latest
+latest version>
+
+e. echo命令
+注：echo命令输出一个字符串外加一个换行符
+echo -n “string to output”     // 阻止添加换行符
+echo -e “string to output\c”   // \c是转义字符（如：\t表示制表，\n表示换行，...）
+
+f. eval命令（Shell内部命令）
+eval命令对参数求值（evaluate arguments），比较以下两个例子
+foo=10
+x=foo
+y=’$’$x
+echo $y          // 输出$foo
+
+foo=10
+x=foo
+eval y=’$’$x
+echo $y          // 输出100
+
+注：eval对参数进行两次扫描，然后执行
+ 
+注：利用eval还可定义动态变量， 如下例所示
+for((i=0; i<10; i++)); do
+    eval x$i=$i
+done
+则定义了变量x0,x2,...,x9，其值分别为0,1,...,9
+
+
+g. exec命令
+exec命令有两种用法：
+第1种用法（常用）：用一个不同的程序取代当前Shell
+exec wall “Thanks for all the fish”  // 当前Shell被wall命令取代（此句后面的脚本将不再执行）
+第2种用法（不常用）：更改当前文件描述符（modify the current file descriptors）
+exec 3< afile    // 使得文件描述符3打开以读取afile
+
+h. exit命令
+exit n 命令使得脚本退出，并返回退出码（0表成功，1-125表错误，126文件不可执行，
+127命令未发现, >=128表信号发生（A signal occurred））
+如果命令提示符中输入exit命令，会退出当前登陆
+如果exit不指定退出码，最后一条命令的执行状态将作为返回值
+
+g. export命令
+注：一般情况下，一个Shell中创建的变量，在其子Shell中不可用
+但用export修饰的变量，在其子Shell及其后继Shell中均可用
+下面的例子说明了export的使用
+export2脚本内容如下：
+#!/bin/sh
+echo “$foo”             // foo不可用，此句仅输出一个换行符
+echo “$bar”
+
+export1脚本内容如下：
+#!/bin/sh
+foo=”The first meta-syntactic variable”
+export bar=”The second meta-syntactic variable”
+export2
+
+输出：
+$ export1
+
+The second meta-syntactic variable
+$
+
+注：set -a 或 set -allexport 命令将export其后的所用变量
+（The commands set -a or set -allexport will export all variables thereafter）
+
+h.expr命令将参数作为一个表达式求值（现在大多数脚本使用$((...))代替之）
+x=`expr $x + 1`     // 常用于简单算术
+x=$(expr $x + 1)    // $()将执行expr $x + 1的结果赋给x
+
+expr命令可执行很多表达式计算
+expr1 |  expr2     expr1非0，结果为expr1，否则结果为expr2（ expr1 if expr1 is nonzero, otherwise expr2）
+expr1 &  expr2     任一表达式为0结果为0，否则结果为expr1（Zero if either expression is zero, otherwise expr1）
+expr1 =  expr2     等于Equal
+expr1 >  expr2     大于Greater than
+expr1 >= expr2     大于等于Greater than or equal to
+expr1 <  expr2     小于Less than
+expr1 <= expr2     小于等于Less than or equal to
+expr1 != expr2     不等于Not equal
+expr1 +  expr2     加Addition
+expr1 -  expr2     减Subtraction
+expr1 *  expr2     乘Multiplication
+expr1 /  expr2     整除Integer division
+expr1 %  expr2     求模Integer modulo
+
+此外expr还有以下功能:
+STRING : REGEXP            在STRING中匹配正则表达式REGEXP
+                           REGEXP中包括`\('和`\)'情形，如果匹配，则返回`\('与`\)'之间的匹配字符串，不匹配返回空串
+                           REGEXP不包括`\('和`\)'情形，如果匹配，则返回`\('与`\)'之间的匹配字符数，不匹配返回0
+例子：
+$ expr abc : 'a\(.\)c'
+b
+expr abc : 'a.c'
+3
+                             
+match STRING REGEXP        功能等同STRING : REGEXP 
+substr STRING POS LENGTH   求STRING的子串, 位置计数从1开始
+index STRING CHARS         返回CHARS在STRING中的索引，否则返回0
+length STRING              求STRING的长度
++ TOKEN                    将TOKEN解释为一个字符串, 以便与关键字如：match区分
+
+
+i. printf命令(目前大多数Shell支持此命令)
+注：printf与C/C++中的函数用法类似，不支持float（因为Shell中所有计算看做整数运算）
+
+$ printf “%s\n” hello                     // 输出: hello
+$ printf “%s %d\t%s” “Hi There” 15 people // 输出: Hi There 15 people
+
+j. return命令
+注：return命令从函数返回，可返回一个变量到调用函数处。
+如果未指定返回值，缺省返回最后一条命令的退出码
+
+k. set命令
+注: set命令设置当前Shell的参数变量
+例如我们取date命令执行后输出的第2个字符串（代表月），其脚本如下：
+#!/bin/sh
+echo the date is $(date)
+set $(date)                     // $(date)执行date命令，并返回值，详见下述
+echo The month is $2
+exit 0
+
+l. shift命令
+注：shift命令每次移除1个参数(因此$2变成$1, $3变成$2, ..., $0不变），例如
+
+#!/bin/sh
+set p1 p2 p3
+shif 
+echo $1      	// 输出: p2
+echo $2      	// 输出: p3
+echo $0				// 输出: bash
+echo $#				// 输出: 2
+echo $*				// 输出: p2 p3
+
+
+m. trap命令
+注：trap命令指定收到信号时采取的动作，应该放在保护的脚本前面
+语法： 
+trap command signal        // 一旦捕获到信号signal便执行command（使用trap -l 可列出所有信号）
+trap    signal             // 重置收到signal信号产生时采取的行为
+trap :  signal             // 忽略signal信号(:表示空操作，也就是收到信号啥都不做)
+trap '' signal             // 忽略signal信号，功能同上
+常见信号
+SIGHUP  (1)  挂起（Hang up: 终端退出或用户退出登陆）
+SIGINT  (2)  中断（Interrupt: 用户按Ctrl+C）
+SIGQUIT (3)  退出（Quit: 用户按Ctrl+\）Quit; usually sent by pressing Ctrl+\
+SIGABRT (6)  终止 （Abort: 执行错误发生）
+SIGALRM (14) 报警（Alarm:处理超时）
+SIGTERM (15) 终止T（Terminate：系统关闭）
+
+#!/bin/sh
+trap ‘rm -f /tmp/my_tmp_file_$$’ 2        // 设置收到中断信号时的行为
+echo creating file /tmp/my_tmp_file_$$
+date > /tmp/my_tmp_file_$$
+echo “press interrupt (CTRL-C) to interrupt ....”
+while [ -f /tmp/my_tmp_file_$$ ]; do
+	echo File exists
+	sleep 1
+done
+echo The file no longer exists
+
+trap 2                                   // 设置收到中断信号时执行缺省行为（终止执行脚本）
+	echo creating file /tmp/my_tmp_file_$$
+	date > /tmp/my_tmp_file_$$
+	echo “press interrupt (CTRL-C) to interrupt ....”
+	while [ -f /tmp/my_tmp_file_$$ ]; do
+	echo File exists
+	sleep 1
+done
+echo we never get here
+
+输出：
+creating file /tmp/my_tmp_file_141
+press interrupt (CTRL-C) to interrupt ....
+File exists
+File exists
+File exists
+File exists
+The file no longer exists
+creating file /tmp/my_tmp_file_141
+press interrupt (CTRL-C) to interrupt ....
+File exists
+File exists
+File exists
+File exists
+
+n.unset命令
+注 unset命令移除Shell环境中的变量（不能移除Shell本身定义的只读变量，如IFS）
+
+#!/bin/sh
+foo=”Hello World”   
+echo $foo           // 输出: Hello World
+unset foo           // 效果与foo=等价（但是执行foo=后，变量foo依然存在）
+echo $foo           // 仅输出换行符
+
+
+6）两个非常有用的命令和正则表达式
+
+a. find 命令（搜索文件）
+find . -newer while2 -type f -print  // 当前目录下搜索比while2新的文件，并打印其文件名
+find / -mount -name wish -print      // 根目录下搜索（不搜索mounted目录）名字为wish的文件
+
+语法：find [path] [options] [tests] [actions]
+
+[path]     
+指定搜索路径（绝对路径如/bin或相对路径如..）
+注：若path指定为绝对路径，则查找的文件以绝对路径显示，否则以相对路径显示之
+
+[options]
+-depth             Search the contents of a directory before looking at the directory itself.
+-follow            搜索符号链接（Follow symbolic links）
+-maxdepths N       搜索最多N层目录（Search at most N levels of directory when searching）
+-mount (or -xdev)  不搜索mounted文件系统的目录或xdev目录（Don’t search directories on other file systems）
+
+[tests]
+对搜索到的每个文件进行测试
+-atime N 			文件最后一次访问在N天之前(The file was last accessed N days ago)
+-mtime N 			文件最后一次修改在N天之前（The file was last modified N days ago）
+-name pattern       文件名匹配模式pattern
+-iname pattern      文件名匹配模式pattern(忽略大小写)
+-path	pattern	    路径匹配模式pattern
+-path	pattern		路径匹配模式pattern(忽略大小写)
+-regex pattern		路径匹配模式pattern，pattern是正则表达式
+-iregex pattern		路径匹配模式pattern(忽略大小写)，pattern是正则表达式
+-newer otherfile    文件比otherfile新（The file is newer than the file otherfile）
+-type C             文件的类型是C(使用中C替换为如：d表示目录， f表示一般文件)
+-size +3k			文件尺寸（+3K表示大于3k 如：c - bytes k – Kilobyte，M – Megabyte， G – Gigabyte）
+-user username      文件为用户username所拥有（The file is owned by the user with the given name）
+-prune              忽略某个目录(如果是目录则忽略返回真)
+
+也可组合测试
+!  (或-not)  非（Invert the test）
+-a (或-and） 与（Both tests must be true）
+-o （或-or）  或（Either test must be true)
+例如：
+\(-newer X -o -name “_*” \)  // 表示比X新的或者文件名以_开头的文件，注意括号前加反斜扛 包含*的地方加引号
+
+[actions]
+对每个通过测试的文件执行操作
+-exec command  		执行命令command
+-ok command    		与-exec相同（只是执行command之前提示用户）
+-print 				打印文件名（文件名之间用换行符分隔）
+-print0             打印文件名（文件名之间用null或0字符分隔，配合xargs -0选项使用）
+-ls    				相同于执行命令ls -dils file
+
+注：actions缺省的情况下，应用-print选项，-print0选项（用在文件名中有空格\换行等特殊字符的情况），往往与xargs的-0选项配合
+find . -name '*.txt' -print0 | xargs -0 -I {} echo {}
+
+注：-exec和-ok命令，将其后的参数作为它们参数的部分，\;表示是command的参数的结束（所以转义了），{}表示文件路径
+$ find . -newer while2 -type f -exec ls -l {} \;
+-rwxr-xr-x 1 rick rick 275  Feb 8 17:07 ./elif3
+-rwxr-xr-x 1 rick rick 336  Feb 8 16:52 ./words.txt
+-rwxr-xr-x 1 rick rick 1274 Feb 8 16:52 ./words2.txt
+-rwxr-xr-x 1 rick rick 504  Feb 8 18:43 ./_trap
+注：如果忽略test/test3目录下文件和其子目录
+find test -path "test/test3" -prune -o -print
+
+
+
+b. grep命令（搜索字符串）
+语法：
+grep [options] PATTERN [FILES]
+含意：应用选项[options]，在[FILES]中搜索匹配PATTERN模式的字符串
+
+[options]
+-c 打印匹配的行数（不打印匹配的行）
+-E 启用extended表达式（Turn on extended expressions）
+-h 阻止打印匹配字符串所在文件名前缀（默认情况下打印文件名前缀）
+-i 忽略大小写
+-l 仅列出匹配字符串所在文件名（不输出具体匹配行
+-v 反转匹配模式（即搜索不匹配的行）
+-o 仅输出匹配的部分
+注：默认情况下PATTERN
+
+c.正则表达式
+某些字符以特殊方式处理（使用这些特殊字符需加\，如\$表示字符$）：
+^ 				行开始（Anchor to the beginning of a line）
+$ 				行结束（Anchor to the end of a line）
+. 				任意单个字符（Any single character）
+[ ] 			表示某个范围的任意字符如[a-z], [^a-z]刚好相反
+
+其它可在[]中使用的字符有：
+[:alnum:] 	算术字符Alphanumeric characters
+[:alpha:] 	字母Letters
+[:ascii:] 	ASCII字符ASCII characters
+[:blank:] 	空格或制表Space or tab
+[:cntrl:] 	ASCII控制字符ASCII control characters
+[:digit:] 	数字Digits
+[:graph:] 	非控制，非空字符Noncontrol, nonspace characters
+[:lower:] 	小写字母Lowercase letters
+[:print:] 	可打印字符Printable characters
+[:punct:] 	标点符号Punctuation characters
+[:space:] 	空白字符包括垂直制表符Whitespace characters, including vertical tab
+[:upper:] 	大写字母Uppercase letters
+[:xdigit:] 	十六进制数字Hexadecimal digits
+
+如果启用了-E选项，重复（repetition）字符如下（使用时需加\）
+? 				匹配最多1次（Match is optional but may be matched at most once）
+* 				匹配0次及以上（Must be matched zero or more times）
++ 				区配1次及以上（Must be matched one or more times）
+{n} 			区配n次以上（Must be matched n times）
+{n,} 			区配n次及以上（Must be matched n or more times）
+{n,m} 		区配n或m次（Must be matched between n or m times inclusive）
+
+一些例子：
+grep e$ words2.txt  					  // 匹配以e结束的行
+grep a[[:blank:]] words2.txt    // 匹配以a结束的单词
+grep Th.[[:space:]] words2.txt  // 匹配以Th开始的3个字母的单词
+grep -E [a-z]\{10\} words2.txt  // 匹配10个小写字母的单词
+
+7）	命令执行（Command Execution）
+前面已提到过，如果想将命令的输出赋给一个变量，我们使用$(command) 语法
+例如：
+echo $(date)  				// 显示date命令的输出
+var = $(date) 				// 将date命令的输出赋给变量var
+
+a. 算术扩展（Arithmetic Expansion）
+使用$((...))语法，注意其与$(...)的区别
+#!/bin/sh
+x=0
+while [ “$x” -ne 10 ]; do
+	echo $x
+	x=$(($x+1))
+done
+exit 0
+
+b. 参数扩展（Parameter Expansion）
+
+#!/bin/sh
+for i in 1 2; do
+	my_secret_process $i_tmp   // 愿意是想处理1_tmp,2_tmp两个文件
+	                           // 实际上$i_tmp引用了变量i_tmp，i_tmp根本不存在
+done
+
+
+#!/bin/sh
+for i in 1 2; do
+	my_secret_process ${i}_tmp   // 加${}对参数进行扩展，现在可以处理1_tmp,2_tmp两个文件了
+done
+
+一些参数扩展（更多请参考正文）：
+${param=default}    如果param没有声明，其值为default（param的值变为default）
+${param-default}    如果没有声明，其值为default（param本身不变）
+${param+default}    如果声明了param，其值为default（param本身不变）
+${param?ERR_MSG} 	如果param没被声明, 那么就打印出错ERR_MSG，并退出
+
+${param:=default}   如果param为空，或者没有声明，其值为default（param的值变为default）
+${param:-default}   如果param为空，或者没有声明，其值为default（param本身不变）
+${param:+default}   如果param不为空(显然是已经声明了的)，其值为default（param本身不变）
+${param:?ERR_MSG} 	如果param没被声明或者为空, 那么就打印出错ERR_MSG，并退出
+
+${#param}           给出param的长度（Gives the length of param）
+${param%word}       从尾部开始,移除匹配word的最小部分，返回剩余部分 
+${param%%word}      从尾部开始,移除匹配word的最长部分，返回剩余部分
+${param#word}       从头部开始,移除匹配word的最小部分，返回剩余部分
+${param##word}      从头部开始,移除匹配word的最长部分，返回剩余部分
+[记忆] param前出现'='时, 变量param的值才会改变, 有:表示声明或值为空，无：表示声明
+
+参数扩展在字符串处理时很有用，如下例
+#!/bin/sh
+unset foo
+echo ${foo:-bar}
+foo=fud
+echo ${foo:-bar}
+foo=/usr/bin/X11/startx
+echo ${foo#*/}
+echo ${foo##*/}
+bar=/usr/local/etc/local/networks
+echo ${bar%local*}
+echo ${bar%%local*}
+exit 0
+
+输出：
+bar
+fud
+usr/bin/X11/startx
+startx
+/usr/local/etc
+/usr
+
+8）	Here文档（Here Documents）
+顾名思义，命令的参数就来自于Here. Here文档可用于I/O重定向, 比如给交互式程序（如ftp, cat, ex...）输入命令
+
+用法：
+interactive-program <<LimitString
+command #1
+command #2
+...
+LimitString
+
+例子：
+#!/bin/sh
+TYPE="here"
+cat <<EOF                   // 以<<EOF作为Here文档的开头标记（EOF可换成其它字符串）
+hello              　        // 标记不能出现在与文档同一行
+this is a $TYPE　document    // Here文档中可包括参数$HERE（如果想输出"$HERE", 可使用<<"EOF"或'EOF'作为开始标记，结束标识为EOF）
+EOF                         // 同时也以EOF作为Here文档的结尾标记
+      
+输出：
+hello
+this is a here document
+
+
+
+9）调试脚本（Debugging Scripts）
+一般情况下，当有错误发生时，Shell会打印出错的行号．如果错误并不明显，可添加echo语句输出某些变量
+跟踪错误的主要方法是设置Shell选项（可使用命令行选项或set命令选项），如下表：
+————————————————————————————————————————————————————————————————————————————————
+命令行					选项设置      	描述
+————————————————————————————————————————————————————————————————————————————————
+sh -n <script> 			set -o noexec  	仅检查语法错误，不执行命令（Checks for syntax 
+                		set -n          errors only; doesn’t execute commands）
+     
+sh -v <script> 			set -o verbose 	执行命令前输出命令
+						set -v 					
+										
+sh -x <script> 			set -o xtrace 	处理命令后输出命令 
+						set -x     		
+										
+						set -o nounset 	如果变量未定义则给出错误消息
+						set -u 					
+————————————————————————————————————————————————————————————————————————————————
+
+注：set命令的选项使用-o代表开启某项功能，+o代表关闭某项功能．
+开启xtrace功能，Shell在执行每行脚本前，会打印出每行脚本、展开相关变量
+使用方法如下：
+set -o xtrace　　// 开启xtrace（等价命令： set -x）
+...              // 此处是可能出现问题的脚本代码
+set +o xtrace    // 关闭xtrace(等价命令： set +x)
+
+10）Dialog实用工具（The Dialog Utility）
+如果想在Shell中显示一个对话框（其文本Hello world, 高为9字符，宽为18字符），下面一句就搞定：
+dialog --msgbox “Hello World” 9 18
+
+语法：
+dialog [common] [box]
+[common]常见选项：
+  --title <text>   // 对话框标题
+  --clean          // 清除对话框
+
+[box]选项为
+多选框 		--checklist    <text> <height> <width> <list height> <tag1> <item1> <status1>...
+单选杠 		--radiolist    <text> <height> <width> <list height> <tag1> <item1> <status1>...
+信息框		--infobox      <text> <height> <width>
+输入框		--inputbox     <text> <height> <width> [<init>]
+菜单框		--menu         <text> <height> <width> <menu height> <tag1> <item1>...
+消息框		--msgbox       <text> <height> <width>
+文本框		--textbox      <file> <height> <width>
+确认框		--yesno        <text> <height> <width>
+
+注：应先安装dialog程序. dialog --help获取帮助
+
+#!/bin/sh
+# 提问并收集答案
+# 显示一个简单对话框提示用户
+dialog --title “Questionnaire” --msgbox “Welcome to my simple survey” 9 18
+
+# 询问用户选择
+dialog --title “Confirm” --yesno “Are you willing to take part?” 9 18
+
+# 环境变量$?判断是用户选择Yes(返回码为0)
+if [ $? != 0 ]; then
+dialog --infobox “Thank you anyway” 5 20
+sleep 2
+dialog --clear
+exit 0
+fi
+
+# 提示用户输入，输入的内容重定向到_1.txt，将cat命令的输出赋给变量Q_NAME
+dialog --title “Questionnaire” --inputbox “Please enter your name” 9 30 2>_1.txt
+Q_NAME=$(cat _1.txt)
+
+# 显示菜单，将用户选择重定向标准错输出流到_1.txt，并将其保存到变量Q_MUSIC
+dialog --menu “$Q_NAME, what music do you like best?” 15 30 4 1 “Classical” 2
+“Jazz” 3 “Country” 4 “Other” 2>_1.txt
+Q_MUSIC=$(cat _1.txt)
+
+# 如果用户选择了第1项，则提示
+if [ “$Q_MUSIC” == “1” ]; then
+dialog --msgbox “Good choice!” 12 25
+fi
+
+# 休眠5秒后清除对话框
+sleep 5
+dialog --clear
+exit 0
+
+11）算术运算let, (( )), [], expr, bc
+a=4;
+b=5;
+let c=a+b							// 无须$前辍符号
+c=$[ a + b ]					// 与let c=a+b等价
+c=$((a + b))					// 与let c=a+b等价
+c=$(expr a + b)				// 与let c=a+b等价
+let c++								// 自增，等价于let c=c+1
+let c--								// 自减，等价于let c=c-1
+c=$(echo "4.01*5.01" | bc) 	// 用于浮点精确计算
+
+
+12) 数组
+array_var=(1 2 3 4 5 6)		// 定义6个元素的数组
+array_var[0]="Hello"			// 定义两个元素的数组
+array_var[1]="World"			//
+
+echo ${array_var[*]}			// 打印数组所有元素
+echo ${array_var[@]}			// 打印数组所有元素
+
+echo ${#array_var[@]}			// 打印数组元素个数
+echo ${#array_var[1]}           // 打印第2个元素的长度
+
+echo ${!array_var[*]}			// 打印数组所有索引
+echo ${!array_var[@]}			// 打印数组所有索引
+
+13）别名
+alias install='sudo apt-get install'	// 定义别名install，使用时如install git相当于
+																				 sudo apt-get install git
+alias rm='cp $@ ~/backup; rm $@'			// 删除时备份原文件；使用\rm可引用原来的rm
+
+14）read
+read -n 2 var						      		// 从stdin读两个字符到var
+read -s var 											// 从stdin读到var,输入不回显
+read -p "Enter Password:" var 		// 显示提示Enter Password:
+read -t 2 var										  // 2秒之内将读到的存入var
+read -d ":" var										// 以符号:作为读取分隔符
+
+15）字符串处理
+I. 判断读取字符串值
+${var} 				变量var的值, 与$var相同
+
+${var-DEFAULT} 		如果var没有被声明, 那么就以DEFAULT作为其值
+${var:-DEFAULT} 	如果var没有被声明, 或者其值为空, 那么就以DEFAULT作为其值
+
+${var=DEFAULT} 		如果var没有被声明, 那么就以DEFAULT作为其值
+${var:=DEFAULT} 	如果var没有被声明, 或者其值为空, 那么就以DEFAULT作为其值
+
+${var+OTHER} 		如果var声明了, 那么其值就是OTHER, 否则就为null字符串
+${var:+OTHER} 		如果var声明,并且值不为空, 那么其值就是OTHER, 否则就为null字符串
+
+${!varprefix*} 		匹配之前所有以varprefix开头进行声明的变量
+${!varprefix@} 		匹配之前所有以varprefix开头进行声明的变量
+
+注：
+带有=号的才会改变var的值，带有:的表示是否为空，不带的表示是否声明
+有些shell不支持下面的语法：
+${var?ERR_MSG} 		如果var没被声明, 那么就打印出错ERR_MSG，并退出
+${var:?ERR_MSG} 	如果var没被声明或者为空, 那么就打印出错ERR_MSG，并退出
+
+II. 字符串操作（长度，读取，替换）
+${#string} 						    $string的长度	 
+${string:position} 					在$string中, 从位置$position开始提取子串
+${string:position:length} 	        在$string中, 从位置$position开始提取长度为$length的子串
+  	 
+${string#substring} 	从变量$string的开头, 删除最短匹配$substring的子串
+${string##substring} 	从变量$string的开头, 删除最长匹配$substring的子串
+${string%substring} 	从变量$string的结尾, 删除最短匹配$substring的子串
+${string%%substring} 	从变量$string的结尾, 删除最长匹配$substring的子串
+  	 
+${string/substring/replacement} 	使用$replacement, 来代替第一个匹配的$substring
+${string//substring/replacement} 	使用$replacement, 代替所有匹配的$substring
+${string/#substring/replacement} 	如果$string的前缀匹配$substring, 那么就用$replacement来代替匹配到的$substring
+${string/%substring/replacement} 	如果$string的后缀匹配$substring, 那么就用$replacement来代替匹配到的$substring
+
+${#*}           位置参数的个数（不包括第0个参数$0，只在bash中成立，而sh中指的是$*的长度）          
+${#@}           位置参数的个数
+
+
+注意array为数组的情况：
+${#array}       数组第一个元素的长度
+${#array[1]}    数组第2个元素的长度
+${#array[*]}    数组元素的个数
+${#array[@]}    数组元素的个数
+
+16）nohup
+如果stdin 是一个terminal，则重定向到/dev/null
+如果stdout是一个terminal, 则重定向到nohup.out, 否则重定向到$HOME/nohup.out
+如果stderr是一个terminal, 则重定向到stdout
+例子:
+    nohup test.sh &    // （实质上是将执行test.sh的shell的session id改了） 
+
+注： &表示将nohup放在后台运行（而不是将test.sh放在后台）
+注： 如果想要保存stdout/stderr，可使用：　nohup COMMAND > FILE
+
+17) 使用getopts处理脚本参数
+#!/bin/bash
+usage() { echo "Usage: $0 [-s <45|90>] [-p <string>]" 1>&2; exit 1; }
+while getopts ":s:p:" o; do
+    case "${o}" in
+        s)  s=${OPTARG}
+            ((s == 45 || s == 90)) || usage ;;
+        p)  p=${OPTARG} ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND-1))
+if [ -z "${s}" ] || [ -z "${p}" ]; then
+    usage
+fi
+echo "s = ${s}"
+echo "p = ${p}"
+
+a)相关术语（如下命令）
+mybackup -x -f /etc/mybackup.conf -r ./foo.txt ./bar.txt
+其中：
+mybackup为命令
+-x -r -f均为选项，-r -x为可选项，－f后接选项参数
+./foo.txt ./bar.txt依次为命令参数
+注：bash不支持--开头的长参数形式，仅支持单字符选项，选项字符可以是小写，大写或数字（不建议）
+
+b) getopts语法：
+getopts OPTSTRING VARNAME [ARGS...]
+其中:
+OPTSTRING：  指出期望哪些选项（注意冒号的使用：OPTSTRING开头有：表示启动Slient模式，选项后接：表示选项有参数）
+VARNAME：    此变量用于保存选项字符
+ARGS：       tells getopts to parse these optional words instead of the positional parameters
+getopts依据OPTSTRING来处理各个选项参数
+内部变量：
+OPTIND	下一个参数索引（初始为1）
+OPTARG	选项的参数
+OPTERR	(0 或 1) 是否打印错误消息（初始为1）
+错误处理（两种模式，一般设为Silent模式）：
+Verbose模式下：
+无效选项：  VARNAME设置为?  OPTARG未设置
+选项无参数：VARNAME设置为?  OPTARG未设置，打印错误
+Silent模式下：
+无效选项：  VARNAME设置为?  OPTARG设置为无效选项字符
+选项无参数：VARNAME设置为： OPTARG设置为选项字符
+例子
+#!/bin/bash
+while getopts ":a:" opt; do 
+  case $opt in
+    a)
+      echo "-a was triggered, Parameter: $OPTARG" >&2
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+结果分析：
+$ ./go_test.sh                  // 无选项和参数，不输出
+$ ./go_test.sh /etc/passwd      // 只有参数，无选项，不输出
+$ ./go_test.sh -b               // 无效选项
+Invalid option: -b
+$ ./go_test.sh -a               // 选项有效，但无选项参数 
+Option -a requires an argument.
+$ ./go_test.sh -a /etc/passwd   // 选项有效，也有选项参数 
+-a was triggered, Parameter: /etc/passwd
+
+18)工作控制（Job Control）
+主要的命令：
+ps   - 列出进程
+kill - 发生信号, 如kill [-<sig>] <pid> 或 kill [-<sig>] <job-id> 
+jobs - 列出后台job，显示<job-id>列表
+bg   - 将一个进程放入前台，如bg %1
+fg   - 将一个进程放入后台, 如fg %2
+注：　
+<job-id>由%开头，如：kill  %1
+
+19) chroot（更变root目录后执行命令或交互式Shell）
+chroot [OPTION] NEWROOT [COMMAND [ARG]...]  // 运行命令，新的根目录设置为NEWROOT
+chroot OPTION                               // 无命令时，运行 `${SHELL} -i` （缺省/bin/sh）
+其中OPTION：
+--userspec=USER:GROUP   // 指定user和group(ID和name)
+--groups=G_LIST         // 指定附加的groups（格式g1,g2,..gN)
+
+20)文件和目录的特殊权限
+常见权限：可针对usr,group,other分别设置其r,w,x权限
+特殊权限：如果设置了，则位于原来x权限的位置
+a) s权限（SETUID或SETGID）, 设置后可执行文件以它的user或group权限运行（而不是运行它的用户的权限）
+s权限可用于文件或目录，但只能针对usr和group，如
+chmod u+s file-or-dir  // file-or-dir的usr权限的x位置为S(如果没有x权限)或s(如果有x权限)
+chmod g+s file-or-dir  // file-or-dir的group权限的x位置为S(如果没有x权限)或s(如果有x权限)
+
+SETUID对目录无影响，SETGID用于目录后，目录下所创建的所有文件具有相同的GID
+
+b) t权限（Sticky Bit Permissions）
+主要用于目录，如果设置了Sticky位，目录下的文件只能被root或目录的owner删除或重命名
+注意：Sticky位只能位于other的x位置，如果设置了Sticky位则x位置为T(如果没有x权限)或t(如果有x权限)
+chmod u+t dir       // 无作用，因为dir的usr权限不能设置Sticky位
+chmod o+t dir       // dir的other权限的x位置为T(如果没有x权限)或t(如果有x权限)
+
+注：
+a) 除了user,group,other的r,w,x权限外，还有以下特殊权限：
+S_ISUID 04000       // SETUID权限，只能位于user的x权限位置，显示为s(x权限设置)或S(x权限未设置)    chmod u+s file
+S_ISGID 02000       // SETGID权限，只能位于group的x权限位置，显示为s(x权限设置)或S(x权限未设置)   chmod g+s file/dir
+S_ISVTX 01000       // Sticky权限，只能位于other的x权限位置，显示为t(x权限设置)或T(x权限未设置)   chmod o+t dir
+
+b) 新创建文件（通过open/create）或目录（通过mkdir）时通过mode指定权限，但最终文件的权限是由mode和umask共同决定
+umask是进程文件模式创建Mask，umask继承其父进程，进程可通过umask(mode_t mask)函数设置, 举个例子容易理解：
+若文件创建时指定的权限为rwxrwxrwx，　进程的umask为----wx-wx，　则最终文件的权限为rwxr--r--
+
+
+21) UID/EUID/RUID/SUID/FSUID
+a) Unix通过UID和GID来标识用户和组，用户名通过/etc/passwd映射到UID，组名通过/etc/group映射到GID
+每个Unix进程3个UID:
+EUID: 有效UID: 决定了进程的当前访问权限（进程可通过setuid系统调用提升或降低访问权限）
+RUID: 真实UID：运行进程的用户ID
+SUID: 保存UID: 进程提升（或降低）权限时，用于保存先前的EUID，以便恢复
+和3个GID:
+EGID: 有效GID
+RGID: 真实GID
+SGID: 保存GID
+Linux进程还有FSUID和FSGID：
+FSUID: 文件系统UID：控制进程对文件系统的访问，若未显示设置，其值等于EUID
+FSGID: 文件系统GID
+b) 由fork创建的子进程继承其父进程的4个UIDs和GIDs
+c) 由exec创建的子进程，如果执行文件的SETUID权限位被设置，则进程的SUID=EUID=文件owner的UID
+
+22) 子Shell(Subshell)
+子Shell是Shell的子进程(执行某些命令或脚本就会产生子Shell)，可用于并发处理
+命令放在括号里可产生子Shell, 如：
+( command1; command2; command3; ... )
+
+注：
+1) 子Shell中的变量不能被外部（父Shell）访问（理解：子shell运行在不同的进程中）
+2) 子Shell中可访问外部变量，但不能改变外部变量（理解：子进程继承了环境变量）
+3) { command1; command2; command3; . . . commandN; }是代码块，不是产生子Shell的语法
+4) 子Shell可测试变量是否定义
+if (set -u; : $variable) 2> /dev/null
+then
+  echo "Variable is set."
+fi
+5) 子Shell可用于准备一个专门的环境(理解：子Shell运行在自己的进程中，当然可以设置自己的环境)
+
+

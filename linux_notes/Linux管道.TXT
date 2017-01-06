@@ -1,0 +1,251 @@
+Linux管道
+
+1）什么是管道，举例来说：
+cmd1 | cmd2
+a. cmd1的标准输入来自键盘
+b. cmd1的标准输出作为cmd2的标准输入
+c. cmd2的输准输出到显示器
+
+2）进程管道（Process Pipes）
+#include <stdio.h>
+
+// 打开管道
+// command： 启动进程的命令串
+// open_mode：只能是"r"（从启动进程的输出中fread）和"w"（fwrite到起启动进程的标准输入）两种模式之一
+FILE *popen(const char *command, const char *open_mode);
+
+// 关闭管道
+int pclose(FILE *stream_to_close);
+
+注： popen执行有两个方面的影响：
+a. 启动进程之前可通过Shell进行参数扩展（parameter expansion）
+b. 每调用popen会导致产生两个进程：Shell进程和启动进程
+
+3）管道调用（The Pipe Call）
+#include <unistd.h>
+// 建立管道
+// 只能写数据到file_descriptor[1]，从file_descriptor[0]读取数据
+// 从file_descriptor[0]读或写file_descriptor[1]导致未定义行为
+int pipe(int file_descriptor[2]);
+
+程序pip3源码：
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+int main()
+{
+	int data_processed;
+	int file_pipes[2];
+	const char some_data[] = “123”;
+	char buffer[BUFSIZ + 1];
+	pid_t fork_result;
+	memset(buffer, ‘\0’, sizeof(buffer));
+	if (pipe(file_pipes) == 0) {
+		fork_result = fork();             									// 复制进程
+		if (fork_result == (pid_t)-1) {
+			fprintf(stderr, “Fork failure”);
+			exit(EXIT_FAILURE);
+		}
+		if (fork_result == 0) {
+			sprintf(buffer, “%d”, file_pipes[0]);
+			(void)execl(“pipe4”, “pipe4”, buffer, (char *)0);  // 让pip4替代子进程
+			exit(EXIT_FAILURE);
+		}
+		else {
+			data_processed = write(file_pipes[1], some_data,   // 写数据到管道
+			strlen(some_data));
+			printf(“%d - wrote %d bytes\n”, getpid(), data_processed);
+		}
+	}
+	exit(EXIT_SUCCESS);
+}
+
+程序pip4源码：
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+int main(int argc, char *argv[])
+{
+	int data_processed;
+	char buffer[BUFSIZ + 1];
+	int file_descriptor;
+	memset(buffer, ‘\0’, sizeof(buffer));
+	sscanf(argv[1], “%d”, &file_descriptor);
+	data_processed = read(file_descriptor, buffer, BUFSIZ); // 从管道读取数据
+	printf(“%d - read %d bytes: %s\n”, getpid(), data_processed, buffer);
+	exit(EXIT_SUCCESS);
+}
+
+输出：
+$ ./pipe3
+980 - wrote 3 bytes
+981 - read 3 bytes: 123
+
+4）管道作为标准输入输出使用（Pipes Used as Standard Input and Output）
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+int main()
+{
+	int data_processed;
+	int file_pipes[2];
+	const char some_data[] = “123”;
+	(pid_t) fork_result;
+	if (pipe(file_pipes) == 0) {
+		fork_result = fork();
+		if (fork_result == (pid_t)-1) {
+			fprintf(stderr, “Fork failure”);
+			exit(EXIT_FAILURE);
+		}
+	
+		if (fork_result == (pid_t)0) {
+			close(0);								// 注意：关闭描述符0后，描述符0成为最小的可用描述符
+			dup(file_pipes[0]);			// 调用dup（dup总是分配可用的最小描述符）函数后，描述符0与file_pipes[0]都指向管道的读取端
+			close(file_pipes[0]);		// 即然有两个描述符指向同一管道读取读，关掉file_pipes[0]
+			close(file_pipes[1]);
+			execlp(“od”, “od”, “-c”, (char *)0);  // 从描述符0读取，自然就变成了从管道读取
+			exit(EXIT_FAILURE);
+		}
+		else {
+			close(file_pipes[0]);
+			data_processed = write(file_pipes[1], some_data,
+			strlen(some_data));
+			close(file_pipes[1]);
+			printf(“%d - wrote %d bytes\n”, (int)getpid(), data_processed);
+		}
+	}
+	exit(EXIT_SUCCESS);
+}
+
+输出：
+$ ./pipe5
+1239 - wrote 3 bytes
+0000000 1 2 3
+0000003
+
+5）命名管道（Named Pipes: FIFOs）
+
+a. 创建命名管道
+#include <sys/types.h>
+#include <sys/stat.h>
+
+// mode：指定权限（与创建普通文件类似，如0777, 当然受到umask影响）
+int mkfifo(const char *filename, mode_t mode);
+int mknod(const char *filename, mode_t mode | S_IFIFO, (dev_t) 0);
+
+
+b．使用open打开FIFO（Opening a FIFO with open）
+注：打开FIFO管道的限制：不能是O_RDWR，也就是不能即读又写
+open(const char *path, O_RDONLY);									// 阻塞读方式，直到其它进程以写方式打开此管道
+open(const char *path, O_RDONLY | O_NONBLOCK);		// 非阻塞读方式
+open(const char *path, O_WRONLY);									// 阻塞写方式，直到其它进程以读方式打开此管道
+open(const char *path, O_WRONLY | O_NONBLOCK);		// 非阻塞写方式
+
+c. 进程间通信（使用命名管道）示例：
+客户端、服务端通用的头文件client.h
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#define SERVER_FIFO_NAME 	“/tmp/serv_fifo”
+#define CLIENT_FIFO_NAME 	“/tmp/cli_%d_fifo”
+#define BUFFER_SIZE 20
+struct data_to_pass_st {
+	pid_t client_pid;
+	char some_data[BUFFER_SIZE - 1];
+};
+服务端：
+#include “client.h”
+#include <ctype.h>
+int main()
+{
+	int server_fifo_fd, client_fifo_fd;
+	struct data_to_pass_st my_data;
+	int read_res;
+	char client_fifo[256];
+	char *tmp_char_ptr;
+	mkfifo(SERVER_FIFO_NAME, 0777);  													// 创建服务管道
+	server_fifo_fd = open(SERVER_FIFO_NAME, O_RDONLY); 				// 以阻塞读方式打开
+	if (server_fifo_fd == -1) {
+		fprintf(stderr, “Server fifo failure\n”);
+		exit(EXIT_FAILURE);
+	}
+	sleep(10); 																								// 等待客户端一会儿
+	do {                                                			// 从服务管道读取数据
+		read_res = read(server_fifo_fd, &my_data, sizeof(my_data));
+		if (read_res > 0) {
+			tmp_char_ptr = my_data.some_data;
+			while (*tmp_char_ptr) {
+				*tmp_char_ptr = toupper(*tmp_char_ptr);
+				tmp_char_ptr++;
+			}
+			sprintf(client_fifo, CLIENT_FIFO_NAME, my_data.client_pid);
+			if (client_fifo_fd != -1) {
+				write(client_fifo_fd, &my_data, sizeof(my_data)); 	// 向客户端管道写数据
+				close(client_fifo_fd);
+			}
+		}
+	} while (read_res > 0);
+	close(server_fifo_fd);  																	// 关闭服务管道
+	unlink(SERVER_FIFO_NAME);																	// 删除服务管道
+	exit(EXIT_SUCCESS);
+}
+客户端：
+#include “client.h”
+#include <ctype.h>
+int main()
+{
+	int server_fifo_fd, client_fifo_fd;
+	struct data_to_pass_st my_data;
+	int times_to_send;
+	char client_fifo[256];
+	server_fifo_fd = open(SERVER_FIFO_NAME, O_WRONLY);  							// 以阻塞写方式打开服务管道
+	if (server_fifo_fd == -1) {
+		fprintf(stderr, “Sorry, no server\n”);
+		exit(EXIT_FAILURE);
+	}
+	my_data.client_pid = getpid();
+	sprintf(client_fifo, CLIENT_FIFO_NAME, my_data.client_pid);
+	if (mkfifo(client_fifo, 0777) == -1) {             								// 创建客户端管道
+		fprintf(stderr, “Sorry, can’t make %s\n”, client_fifo);
+		exit(EXIT_FAILURE);
+	}
+	for (times_to_send = 0; times_to_send < 5; times_to_send++) {
+		sprintf(my_data.some_data, “Hello from %d”, my_data.client_pid);
+		printf(“%d sent %s, “, my_data.client_pid, my_data.some_data);
+		write(server_fifo_fd, &my_data, sizeof(my_data));  							// 向服务管道写数据
+		client_fifo_fd = open(client_fifo, O_RDONLY);      							// 以阻塞读方式打开管道
+		if (client_fifo_fd != -1) {
+			if (read(client_fifo_fd, &my_data, sizeof(my_data)) > 0) {  	// 从客户端管道读取数据
+				printf(“received: %s\n”, my_data.some_data);
+			}
+			close(client_fifo_fd);
+		}
+	}
+	close(server_fifo_fd);
+	unlink(client_fifo);
+	exit(EXIT_SUCCESS);
+}
+输出：
+$ server &
+$ for i in 1 2 3 4 5
+	do
+	client &
+	done
+$
+...
+531 sent Hello from 531, received: HELLO FROM 531
+532 sent Hello from 532, received: HELLO FROM 532
+529 sent Hello from 529, received: HELLO FROM 529
+530 sent Hello from 530, received: HELLO FROM 530
+531 sent Hello from 531, received: HELLO FROM 531
+532 sent Hello from 532, received: HELLO FROM 532
+...

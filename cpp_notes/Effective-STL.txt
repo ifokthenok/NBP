@@ -1,0 +1,59 @@
+Effective STL
+---------------------------------------------------------------------------------------------------
+容器
+   条款1：仔细选择你的容器
+   条款2：小心对“容器无关代码”的幻想
+   条款3：使容器里对象的拷贝操作轻量而正确
+   条款4：用empty来代替检查size()是否为0（前者可能常数时间复杂度）
+   条款5：尽量使用区间成员函数代替它们的单元素兄弟" 
+   条款6：警惕C++最令人恼怒的解析（可能将模板看成函数声明, 很常见呢！！！）
+   条款7：当使用new得指针的容器时，记得在销毁容器前delete那些指针
+   条款8：永不建立auto_ptr的容器
+   条款9：在删除选项中仔细选择
+   条款10：注意分配器的协定和约束
+   条款11：理解自定义分配器的正确用法
+   条款12：对STL容器线程安全性的期待现实一些（仅能期待：一个容器上的多读取者和不同容器上的多写入者）
+vector和string
+   条款13：尽量使用vector和string来代替动态分配的数组
+   条款14：使用reserve来避免不必要的重新分配（reserve()先分配N个吧，size()元素个数，capacity()分配了多少）
+   条款15：小心string实现的多样性
+   条款16：如何将vector和string的数据传给传统的API（string::c_str(), &vector[i]但注意越界问题）
+   条款17：使用“交换技巧”来修整过剩容量（轻巧，实用）
+   条款18：避免使用vector<bool>
+关联容器
+   条款19：了解相等和等价的区别（相等: a == b, 等价: !(a < b) && !(b < a) ）
+   条款20：为指针的关联容器指定比较类型（内部用实例化建立函数的一种类型。若不指定，比较的就是指针。注: 指针不能做比较类型, 应使用函数对象！！！）
+   条款21：永远让比较函数对相等的值返回false（这是显然的:) 若a等于b, a < b应该返回false）
+   条款22：避免原地修改set和multiset的键
+   条款23：考虑使用有序vector代替关联容器
+   条款24：当关乎效率时应该在map::operator[]和map-insert之间仔细选择（更新operator[]更好, 插入insert更好）
+   条款25：熟悉非标准散列容器
+迭代器
+   条款26：尽量用iterator代替const_iterator，reverse_iterator和const_reverse_iterator（大多函数或算法要求iterator类型参数）
+   条款27：用distance和advance把const_iterator转化成iterator
+   条款28：了解如何通过reverse_iterator的base得到iterator（base()指向reverse_iterator其后的位置, 插入OK, 删除有问题）
+   条款29：需要一个一个字符输入时考虑使用istreambuf_iterator
+算法
+   条款30：确保目标区间足够大
+   条款31：了解你的排序选择
+   条款32：如果你真的想删除东西的话就在类似remove的算法后接上erase（erase-remove惯用法, 容器remove()真删！！）
+   条款33：提防在指针的容器上使用类似remove的算法
+   条款34：注意哪个算法需要有序区间
+   条款35：通过mismatch或lexicographical比较实现简单的忽略大小写字符串比较
+   条款36：了解copy_if的正确实现（STL中并没有copy_if，若实现之，应保证正确）
+   条款37：用accumulate或for_each来统计区间
+仿函数、仿函数类、函数等
+   条款38：把仿函数类设计为用于值传递（满足可拷贝。让它们小而且单态）
+   条款39：用纯函数做判断式（判断式不应有内部状态。判断式是返回bool（或可转化为bool）的functor）
+   条款40：使仿函数类可适配（可用ptr_fun作用之。原因：not1、not2、bind1st、bind2nd要求你的仿函数类typedef一些argument_type、first_argument_type、second_argument_type，result_type等）
+   条款41：了解使用ptr_fun、mem_fun和mem_fun_ref的原因（mem_fun/mem_fun_ref: 返回指针/对象方式调用成员函数的functor）
+   条款42：确定less<T>表示operator<（理由：默认less<T>调用T的operator<来工作滴！）
+使用STL编程
+   条款43：尽量用算法调用代替手写循环
+   条款44：尽量用成员函数代替同名的算法
+   条款45：注意count、find、binary_search、lower_bound、upper_bound和equal_range的区别（前两者O(N)、相等搜，后面O(logN)、等价有序搜, lower_bound/upper_bound返回等价的第1个/最后1个的下一个, equal_range都返回:）
+   条款46：考虑使用函数对象代替函数作算法的参数
+   条款47：避免产生只写代码（代码不只是写出来，复杂的表达使其可读性、维护性变差）
+   条款48：总是#include适当的头文件（不需要#include那些已被其它头文件包含的文件——错在不同STL的实现可能不同）
+   条款49：学习破解有关STL的编译器诊断信息（模板编译提示过长需整理）
+   条款50：让你自己熟悉有关STL的网站（搜索：SGI STL/STLport/Boost）

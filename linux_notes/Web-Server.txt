@@ -1,0 +1,53 @@
+1 常用嵌入式web server(google即可知道)
+1) lighttpd
+2) thttpd
+3) shttpd
+4) BOA
+5) civetweb
+
+2 civetweb（https://github.com/bel2125/civetweb）
+1）安装
+下载http://sourceforge.net/projects/civetweb/files/
+$ tar -xvzf civetweb.tar.gz
+$ cd <civetweb>
+$ make help                 // Makefile相当简单，很容易看懂
+$ make [COPT＝-m32 ... ]    // 可以加其它CFLAG（实事上这是make本身用法：用于重写变量）
+$ make install [PREFIX=/you/install/path ...]
+
+注：通过更改make的变量CC, COPTS和TARGET_OS实现交叉编译
+TARGET_OS用于决定编译细节，它的值应该在resources/Makefile.in-os找得到，例如：
+make CC=arm-none-linux-gnueabi-gcc COPT="-march=armv7-a  -mfpu=vfp -mfloat-abi=softfp" TARGET_OS=FRO
+
+2）civetweb使用(https://github.com/bel2125/civetweb/blob/master/docs/UserManual.md)
+语法：
+civetweb -A <htpasswd_file> <realm> <user> <passwd>
+civetweb [config_file]             // 可后接一个配置文件(缺省在civetweb.conf同目录下搜索civetweb.conf)
+civetweb [-option value ...]       // 可后接选项指定相关配置（选项优先级高）
+常用option有：
+-listening_ports <port>            // 设置端口,逗号分隔（缺省8080，前面r表示重定向，后面s表示SSL）
+                                   //如： 8080,80s监听8080端口和80SSL端口 又如：80r,443s表示80端口重定向到443SSL端口
+-document_root <path/to/rootdoc>   // 设置文档根目录（缺省当前目录.）
+-index_files <index-file>          // 索引，逗号分隔（缺省：index.html,index.htm,index.cgi,index.shtml,index.php
+-access_control_list <ip-list>     // 控制访问，逗号分隔子网掩码IP（－表示拒绝，＋表示允放）
+                                   // 如：-0.0.0.0/0,+192.168/16表示允许只允许192.168/16子网                                  
+3)移值
+1) 移值到Android(链接Abionic libc)
+$ <NDK-dir>/ndk-build APP_ABI=x86 <civetweb-src-dir>/resource
+然后，生成可执行文件路径：<civetweb-src-dir>/resources/libs/x86/civetweb
+
+2) 移植到32位Linux
+$ cd <civetweb-src-dir>
+$ make COPT＝-m32
+$ make install PREFIX=/path/to/install-dir/
+
+3) 移值到Android linux（链接glibc）
+$ cd <civetweb-src-dir>
+$ make COPT＝-m32 CC=<android-4.04-src>/prebuilt/linux-x86/toolchain/i686-linux-glibc2.7-4.4.3/bin/i686-linux-gcc
+$ make install PREFIX=/path/to/install-dir/
+
+
+
+
+
+
+

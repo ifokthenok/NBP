@@ -1,0 +1,337 @@
+1. 简介
+CMake是开源且跨平台的自动化建立工具。
+CMake学习资源：
+wiki: http://www.cmake.org/Wiki/CMake (给出很多关于CMake的链接，推荐以此为入口)
+docs: http://www.cmake.org/documentation/
+book: Mastering CMake
+tutorial: http://www.cmake.org/cmake-tutorial/ (很不错的手册，摘自Mastering CMake)
+
+2.CMake的配置文件为CMakeLists.txt（类似make的配置文件Makefile）
+CMakeLists.txt由CMake语言编写，CMake语言由一系列命令组成
+COMMAND (args…)
+其中，COMMAND不区分大小写, 参数（区分大小写）以空格（或分号;）分隔
+CMake支持in-place和out-of-place建立方式
+in-place: 在源代码目录下生成中间文件和目标文件
+out-of-place: 在其它目录下生成中间文件和目录文件
+
+1) 一个简单的CMakeList.txt:
+cmake_minimum_required(VERSION 2.6)		// 最小CMake版本2.6
+project(Tutorial)						// 项目名称Tutorial
+add_executable(Tutorial tutorial.cxx)	// tutorial.cxx将最终生成可执行的Tutorial
+
+2) 添加版本号和配置头文件
+set (Tutorial_VERSION_MAJOR 1)			// 设置两个变量（可在TutorialConfig.h.in中访问）
+set (Tutorial_VERSION_MINOR 0)			//
+ 
+configure_file (								// 配置文件
+  "${PROJECT_SOURCE_DIR}/TutorialConfig.h.in"	// 配置的头文件
+  "${PROJECT_BINARY_DIR}/TutorialConfig.h"		// 生成的头文件
+  )
+ 
+include_directories("${PROJECT_BINARY_DIR}")	// 添加include目录
+
+
+注：配置的头文件TutorialConfig.h.in中引用版本变最(＠var＠)
+#define Tutorial_VERSION_MAJOR @Tutorial_VERSION_MAJOR@
+#define Tutorial_VERSION_MINOR @Tutorial_VERSION_MINOR@
+TutorialConfig.h生成：
+#define Tutorial_VERSION_MAJOR 1
+#define Tutorial_VERSION_MINOR 0
+
+3) 添加库
+主CMakeLists.txt：
+option(USE_MYMATH "Use tutorial provided math implementation" ON)	// 选项（默认打开）
+ 
+if (USE_MYMATH)														// 条件
+  include_directories("${PROJECT_SOURCE_DIR}/MathFunctions")		// 包括库的头文件
+  add_subdirectory(MathFunctions)									// 添加子目录（该目录下放CMakeLists.txt）						
+endif (USE_MYMATH)
+							
+target_link_libraries(Tutorial MathFunctions)						// Tutorial链接时需要库MathFunctions
+
+MathFunctions子目录下的CMakeLists.txt：
+add_library(MathFunctions mysqrt.cxx)								// mysqrt.cxx将最终生成库MathFunctions
+
+注：配置的头文件TutorialConfig.h.in中定义宏USE_MYMATH：
+#cmakedefine USE_MYMATH												// #cmakedefine指示符说明这是由CMake定义的宏
+如果option命令中USE_MYMATH选项为ON, 则CMake定义USE_MYMATH，TutorialConfig.h中生成：
+＃define USE_MYMATH
+
+4) 安装和测试
+安装(CMake变量CMAKE_INSTALL_PREFIX决定安装在哪个目录下）:
+install (TARGETS MathFunctions DESTINATION bin)			// 安装库
+install (FILES MathFunctions.h DESTINATION include)		// 安装库的头文件
+install (TARGETS Tutorial DESTINATION bin)				// 安装可执行文件
+install (FILES "${PROJECT_BINARY_DIR}/TutorialConfig.h" // 安装配置头文件       
+         DESTINATION include)
+添加测试：
+add_test (TutorialRuns Tutorial 25)						// TutorialRuns为测试名，测试执行Tutorial 25的返回值为0
+ 
+add_test (TutorialComp25 Tutorial 25) 					// 测试执行Tutorial 25的输出中包含正则表达式"25 is 5"			
+set_tests_properties (TutorialComp25 
+	PROPERTIES PASS_REGULAR_EXPRESSION "25 is 5")
+
+
+macro (do_test arg result)								// 定义宏来简化
+  add_test (TutorialComp${arg} Tutorial ${arg})
+  set_tests_properties (TutorialComp${arg}
+    PROPERTIES PASS_REGULAR_EXPRESSION ${result}
+    )
+endmacro (do_test)
+ 
+do_test (25 "25 is 5")									// 调用宏命令
+ 
+
+5) 添加系统测试（Adding System Introspection）
+
+include (CheckFunctionExists.cmake)
+check_function_exists (log HAVE_LOG)	// 检查系统是否有log函数
+check_function_exists (exp HAVE_EXP)	// 检查系统是否有exp函数
+
+配置的头文件TutorialConfig.h.in这样写:
+#cmakedefine HAVE_LOG
+#cmakedefine HAVE_EXP
+如果check_function_exists命令成功, 则CMake定义HAVE_LOG和HAVE_EXP, TutorialConfig.h中生成：
+#define HAVE_LOG
+#define HAVE_EXP
+
+
+6) 添加用户命令
+add_executable(MakeTable MakeTable.cxx)						// 生成可执行文件
+ 
+add_custom_command (
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Table.h				// 输出
+  COMMAND MakeTable ${CMAKE_CURRENT_BINARY_DIR}/Table.h		// 命令
+  DEPENDS MakeTable											// 依赖
+  )
+相当于Makefile中这样写(Table.h依赖MakeTable)：
+${CMAKE_CURRENT_BINARY_DIR}/Table.h: MakeTable
+	MakeTable ${CMAKE_CURRENT_BINARY_DIR}/Table.h
+
+7) 建立安装包
+include (InstallRequiredSystemLibraries)					// 建立一个平台相关（cygwin, debian, RPMs...）的安装包
+set (CPACK_RESOURCE_FILE_LICENSE  							// License
+     "${CMAKE_CURRENT_SOURCE_DIR}/License.txt")				
+set (CPACK_PACKAGE_VERSION_MAJOR "${Tutorial_VERSION_MAJOR}")	// 版本号
+set (CPACK_PACKAGE_VERSION_MINOR "${Tutorial_VERSION_MINOR}")
+include (CPack)
+
+cpack --config CPackConfig.cmake			// 建立binary安装包
+cpack --config CPackSourceConfig.cmake		// 建立source安装包
+
+3. CMake的权威参考当然是：https://cmake.org/cmake/help/v3.4/index.html (其中v3.4表示3.4版本)
+1) CMake Commands: https://cmake.org/cmake/help/v3.4/manual/cmake-commands.7.html
+常用命令：
+1.1) if-else (条件)
+if (expression) 
+	# then section. 
+	COMMANDX(ARGS ...)  
+	... 
+elseif (expression2) # elseif section. 
+	COMMANDY(ARGS ...) 
+	... 
+else (expression) # else section. 
+	COMMANDZ(ARGS ...) 
+	... 
+endif (expression)
+
+注：elseif和else可选，else和endif括号中的expression可省略（通常省略更简洁, 其它命令如：endwhile(condition)中的condition可省略）
+
+1.2) foreach／while（循环）
+
+foreach(loop_var arg1 arg2 ...) 
+	COMMAND1(ARGS ...)
+	... 
+endforeach(loop_var)
+注：${loop_var}引用循环变量，foreach其它形式：
+
+foreach(loop_var RANGE total) 				// 指定循环范围: 0 ~ total，步长１
+foreach(loop_var RANGE start stop [step])	// 指定循环范围：start ~ stop, 步长step
+foreach(loop_var IN [LISTS [list1 [...]]] 	// LISTS选项指定迭代lists，ITEMS选项指定迭代的items
+					[ITEMS [item1 [...]]])
+					
+while(condition) 
+	COMMAND1(ARGS ...)
+	COMMAND1(ARGS ...) 
+	... 
+endwhile(condition)
+注：while循环体中的命令并不会立即执行，而是先记录起来，直到endwhile时判断condtion, 执行记录的命令
+
+1.3) add_library/executable/custom_target
+
+add_library(<name> [STATIC | SHARED | MODULE] 			// 缺省为STATIC库, MODULE不链接到target,可运行中加载
+			[EXCLUDE_FROM_ALL] source1 [source2 ...])	// 
+
+注：
+ARCHIVE_OUTPUT_DIRECTORY, LIBRARY_OUTPUT_DIRECTORY, RUNTIME_OUTPUT_DIRECTORY可改变生成的库及可执行文件目录，OUTPUT_NAME可改变库名字
+ARCHIVE_OUTPUT_NAME, LIBRARY_OUTPUT_NAME, RUNTIME_OUTPUT_NAME将改写（override）OUTPUT_NAME和OUTPUT_NAME_<CONFIG>的值(OUTPUT_NAME的Config版本)
+ARCHIVE_OUTPUT_NAME_<CONFIG>, LIBRARY_OUTPUT_NAME_<CONFIG>, RUNTIME_OUTPUT_NAME_<CONFIG>为相应Config版本
+
+add_library(<name> <SHARED|STATIC|MODULE|UNKNOWN>		// IMPORTED库引用一个外部项目的库文件 
+			IMPORTED [GLOBAL])
+add_library(<name> OBJECT <src>...)						// 创建一个Object库, 用于编译引用，如：add_library(... $<TARGET_OBJECTS:objlib> ...)
+add_library(<name> ALIAS <target>)						// 创建一个别名target, <name>是<target>的别名
+add_library(<name> INTERFACE [IMPORTED [GLOBAL]])		// 创建一个Interface库, 主要用于仅包括头文件的库
+
+add_executable(<name> [WIN32] [MACOSX_BUNDLE] 			// WIN32指WinMain入口的Win32应用，MACOSX_BUNDLE指Mac OS X Bundle应用
+			　　[EXCLUDE_FROM_ALL] source1 [source2 ...])
+add_executable(<name> IMPORTED [GLOBAL])				/ IMPORTED executable引用一个外部项目的executable 
+add_executable(<name> ALIAS <target>)					// <name>是<target>的别名
+
+
+add_custom_target(<target> [ALL] [command1 [args1...]] 		// 用户target始终(out of time), 如果指定ALL，则将<target>加入到缺省target(每次都会运行command)
+				[COMMAND command2 [args2...] ...] 			// 一系列命令及参数
+		     	[DEPENDS depend depend depend ... ]			// 可指定依赖add_custom_command()的输出 	
+				[BYPRODUCTS [files...]] 					// 副产品
+				[WORKING_DIRECTORY dir] 					// 命令执行的当前目录
+				[COMMENT comment] 							// 命令执行时显示此注释
+				[VERBATIM] 									// 命令参数不作转化(escaped)
+				[USES_TERMINAL] 							// 访问终端的权限
+				[SOURCES src1 [src2...]])					// 指定target的源文件
+				
+add_custom_command(OUTPUT output1 [output2 ...]				// 输出 
+				COMMAND command1 [ARGS] [args1...] 			// 命令
+				[COMMAND command2 [ARGS] [args2...] ...] 
+				[MAIN_DEPENDENCY depend] 					// 主依赖
+				[DEPENDS [depends...]] 						// 依赖
+				[BYPRODUCTS [files...]] 					// 副产品
+				[IMPLICIT_DEPENDS <lang1> depend1 [<lang2> depend2] ...] 
+				[WORKING_DIRECTORY dir] 
+				[COMMENT comment] 
+				[VERBATIM] 
+				[APPEND] 
+				[USES_TERMINAL])
+
+　
+注：
+1) 可将add_dependencies()将custom target添加到其它target的依赖中（如果指定ALL, 则添加到default build target中，这样每次都会执行）
+2) add_custom_command定义command产生OUTPUT指定的文件，相当于Makefile中这样写
+OUTPUT: MAIN_DEPENDENCY DEPENDS 
+	COMMAND
+因此add_custom_command相当于添加了一个信赖，而add_custom_target相当于添加了一个target
+
+
+1.4) target_include_directories/target_compile_definitions/target_compile_options
+																		// SYSTEM: 当作系统include目录，BEFORE: 在已有include目录之前添加
+target_include_directories(<target> [SYSTEM] [BEFORE] 					// INTERFACE, PUBLIC和PRIVATE用于指定后面items的作用域
+						<INTERFACE|PUBLIC|PRIVATE> [items1...] 			// PUBLIC和PRIVATE影响<target>的INCLUDE_DIRECTORIES属性
+					   [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])	// PUBLIC和INTERFACE影响<target>的INTERFACE_INCLUDE_DIRECTORIE属性
+					   													
+target_compile_definitions(<target> 									
+						   <INTERFACE|PUBLIC|PRIVATE> [items1...] 		// PUBLIC和PRIVATE影响COMPILE_DEFINITIONS
+					      [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])	// PUBLIC和INTERFACE影响INTERFACE_COMPILE_DEFINITIONS
+
+target_compile_options(<target> [BEFORE] 								// BEFORE: 在已有编译选项之前添加
+						<INTERFACE|PUBLIC|PRIVATE> [items1...] 			// PUBLIC和PRIVATE影响COMPILE_OPTIONS
+						[<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])	// PUBLIC和INTERFACE影响INTERFACE_COMPILE_OPTIONS
+注：
+INCLUDE_DIRECTORIES的中的内容以-I或-isystem选项加入到编译
+COMPILE_DEFINITIONS中的内容以-D或/D选项加入编译
+OMPILE_OPTIONS中的内容直接作为编译选项
+类似地，针对Interface而言，其消费者(consumer，例如某个target依赖此Interface), 将target编译时会使用以下属性中的内容
+INTERFACE_INCLUDE_DIRECTORIES
+INTERFACE_COMPILE_DEFINITIONS
+INTERFACE_COMPILE_OPTIONS
+
+注：INTERFACE是一种抽象，可以表示仅有头文件的库，也可用来表示某种依赖（具有传递性）
+注：旧版本add_definitions(-DFOO -DBAR ...)可添加任何flags, 主要用于添加preprocessor选项（如-D或/D），作用域为当前目录及其后命令
+
+
+1.5) include_directories/link_directories/target_link_libraries
+
+include_directories([AFTER|BEFORE] [SYSTEM] dir1 [dir2 ...])	// 添加include目录（改变CMakeList.txt所在目录的INCLUDE_DIRECTORIES属性值）　
+															　　// AFTER／BEFORE: 在INCLUDE_DIRECTORIES之后／之前添加，SYSTEM: 作为系统include目录对待
+
+link_directories(directory1 directory2 ...)						// 添加库的搜索目录，影响此命令后的target
+link_libraries([item1 [item2 [...]]] 							// 添加库libraries或flags，影响此命令后的target
+			  [[debug|optimized|general] <item>] ...)
+
+
+target_link_libraries(<target> ... <item>... ...)				// 一般形式：指定链接<target>所需要的libraries或flags
+																// <item>可以是: 1) 库target 2)库全路径　3)库名(例：foo变为-lfoo)　4) 链接flag(以-开头，但不是-l或-framework)
+																// 5) <item>之前有debug/optimized/general修饰(表明debug配置／非debug配置／所有配置起作用)		
+
+target_link_libraries(<target> <PRIVATE|PUBLIC|INTERFACE> <item>... 		// 指定<target>的link依赖性（注意依赖传递性） 
+																			// <item>为库: PUBLIC: link到target(具有link传递性), PRIVATE: link到target(不具有link传递性)
+							  [<PRIVATE|PUBLIC|INTERFACE> <item>...]...)	// <item>为INTERFACE：不link到target，但
+
+target_link_libraries(<target> <item>...)									// 缺省情况下：库依赖性具有传递性（transitive）						  
+							  
+target_link_libraries(<target> <LINK_PRIVATE|LINK_PUBLIC> <lib>... 			// 遗留(Legacy)方式:　LINK_PUBLIC/LINK_PRIVATE 相当于上面的PUBLIC/PRIVATE
+                              [<LINK_PRIVATE|LINK_PUBLIC> <lib>...]...)
+                              
+target_link_libraries(<target> LINK_INTERFACE_LIBRARIES <item>...)			// 遗留(Legacy)方式: LINK_INTERFACE_LIBRARIES相当于INTERFACE
+
+注：　
+find_library可用于查找名为<name>的库，返回库的全路径保存在变量<VAR>中
+find_library (<VAR> <name> [path1 path2 ...]) 
+
+
+1.6) set/unset（设置变量, cache或环境变量）, set_property(设置属性) get_target_property(获取属性)
+set(<variable> <value>... [PARENT_SCOPE])						// <values>...指代0到多个参数（0参数表示unset变量），PARENT_SCOPE指定父scope（每个函数／目录创建一个新的scope）  
+set(<variable> <value>... CACHE <type> <docstring> [FORCE])		// 设置CACHE，<type>(如STRING，PATH...), <docstring>(描述CACHE变量)，FORCE强制overwrite
+set(ENV{<variable>} <value>...)									// 设置环境变量
+
+unset(<variable> [CACHE | PARENT_SCOPE])						// 取消设置，变量变为undefined
+unset(ENV{LD_LIBRARY_PATH})										// 取消设置环境变量
+
+set_property(<GLOBAL 											// 设置全局属性
+			| DIRECTORY [dir] 									// 目录（缺省为当前目录的）属性
+			| TARGET [target1 [target2 ...]] 					// target属性
+			| SOURCE [src1 [src2 ...]] 							// 源文件属性
+			| INSTALL [file1 [file2 ...]] 						// install属性
+			| TEST [test1 [test2 ...]] | 						// test属性
+			  CACHE [entry1 [entry2 ...]]> 						// cache属性
+			[APPEND] [APPEND_STRING] 							// APPEND：增加属性，APPEND_STRING：属性值增加到已有值（属性值变成一个更长的字符串）
+			PROPERTY <name> [value1 [value2 ...]])				// 指定属性和值
+
+get_target_property(VAR target property)			
+
+注：CMake有两种类型的变量：
+normal变量：每次cmake运行时使用，类似于程序中的局部变量
+cache变量：跨CMake存在，cache变量保存在CMakeCache.txt中，make第一次运行时产生,用户可修改
+两种类型的变量可同名，当${FOO}求值，cmake首先查找normal的FOO, 若不存在，则查找cache中的FOO 
+set(FOO “x”)			// 设置normal变量FOO（不改变cache中的FOO）
+set(FOO “x” CACHE ...)  // 若cache中已有FOO存在，则不做任何事（加FORCE可改变FOO的值），否则将FOO加入cache
+
+1.7) include（从文件或模块加载运行CMake代码）
+include(<file|module> 				// 如果指定了module，则（首先在CMAKE_MODULE_PATH中，然后在CMake模块相录中）查找module.cmake文件
+		[OPTIONAL] 					// file/module不存在时，不报错
+		[RESULT_VARIABLE <VAR>] 	// file/module文件的全路径保存在<VAR>中
+		[NO_POLICY_SCOPE])			// 
+			
+1.8) message (显示消息)
+message可指定消息类型：STATUS, WARNING, AUTHOR_WARNING, SEND_ERROR, FATAL_ERROR.
+
+SEND_ERROR:  输出错误消息后，继续执行
+FATAL_ERROR: 输出错误消息后，退出CMake
+
+示例:
+if　(SOME_COND)
+  message( SEND_ERROR "You can't do that" )
+elsif　(SOME_CRITICAL_COND)
+  message( FATAL_ERROR "You can not do this at all, CMake will exit." )
+endif　()
+
+
+2) CMake properties vs variables
+CMake properties：https://cmake.org/cmake/help/v3.4/manual/cmake-properties.7.html 
+CMake variables: https://cmake.org/cmake/help/v3.4/manual/cmake-variables.7.html
+CMake properties的作用域为：Global, directories，targets, tests, source文件，cache, install文件，
+CMake variables主要以CMAKE_开头用于：
+提供信息：如CMAKE_SOURCE_DIR（source文件目录）,　CMAKE_BUILD_DIR(build目录)
+改变行为：如BUILD_SHARED_LIBS（Global标识，如果为ON, 使得add_library()创建共享库）
+描述系统：如UNIX（Unix系统为True），WIN32（Window系统为True，包括Win64）, CMAKE_HOST_SYSTEM_NAME(主机OS名字，linux下uname -s)
+控制Build：如CMAKE_LIBRARY_OUTPUT_DIRECTORY（生成的库输目录，用于初始化属性target的LIBRARY_OUTPUT_DIRECTORY）
+语言相关：如CMAKE_CXX_COMPILE_FEATURES（C++ compiler的feature列表）
+CTest相关：如CTEST_BINARY_DIRECTORY
+CPack相关：如CPACK_ABSOLUTE_DESTINATION_FILES
+很多Cmake properties的初始值由CMake variables给出
+
+
+3) CMake generator: https://cmake.org/cmake/help/v3.4/manual/cmake-generators.7.html
+CMake generator负责生成本地build系统的配置文件（如Makefile，Visual Studio IDE项目文件）
+cmake --help列出支持的generator
+cmake -G <generator> 指定generator
+
+

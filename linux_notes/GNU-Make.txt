@@ -1,0 +1,444 @@
+Managing Projects With GUN Make
+-------------------------------------------------------------------------------
+
+1. Makefile基本语法
+target1 target2 target3: prerequisite1 prerequisite2
+    command1
+    command2
+    command3
+注：
+1）1或多个目标出现在冒号左边，0个或多个依赖出现在冒号右边
+2）如果没有依赖，则只有当目标不存时才执行命令(如果目标是.PHONY的依赖，则命令始终会执行)
+
+注：
+语法:　make [options] [target] ...
+其中[options]:
+-b, -m                      忽略兼容性
+-B, --always-make           无条件make所有目标.
+-C DIRECTORY                在执行前转向DIRECTORY
+-d                          打印大多数debugging信息
+--debug[=FLAGS]             打印各种类型的调试信息
+-e, --environment-overrides 环境变量重写（或覆盖）
+-h, --help                  显示帮助                         
+-f FILE, --file=FILE        指定Makefile的文件
+-i, --ignore-errors         忽略命令中的错误
+-I DIRECTORY --include-dir=DIRECTORY include <makefiles>时搜索的目标DIRECTORY
+-j [N]                      允许N个Job并行执行
+-k, --keep-going            目录不能make时，继续执行
+-l [N], --load-average[=N], --max-load[=N] 如果load小于N，并不启动N个Job
+-L, --check-symlink-times   使用最新的mtime在symlinks和target之间
+-n, --just-print            仅仅打印而不执行（可用于调试）
+-o FILE                     认为FILE非常旧，并不重新make它       
+-p, --print-data-base       打印make内部database.
+-q, --question              并不运行命令，如果有目标仍未更新, 则以退出码１返回
+-r, --no-builtin-rules      Disable内建（build-in）隐式规则
+-R, --no-builtin-variables  Disable内建（build-in）变量
+-s, --silent, --quiet       不要打印命令（默认时会打印运行的命令）
+-S, --no-keep-going, --stop 关闭 -k选项
+-t, --touch                 Touch目标，而不是重新make它们.
+-v, --version               打印版本并退出
+-w, --print-directory       打印当前目标
+--no-print-directory        关闭-w选项（即使它隐式被打开）
+-W FILE                     认为FILE无穷新                       
+--warn-undefined-variables  对undefined变量给出警告.
+
+注：缺省情况下，make在执行命令之前会打印将执行的命令, 但可通过如下方式阻止：
+1）将@加在命令前
+2）全局添加.SILENT内建（build-in）目标
+3) 使用-s或--silent调用子make,如$(MAKE) --silent ...
+
+
+2. 显示规则（Explicit Rules）
+1）直接将目录和依赖显示列出，如：
+vpath.o variable.o: make.h config.h getopt.h gettext.h dep.h
+其等价于
+vpath.o: make.h config.h getopt.h gettext.h dep.h
+variable.o: make.h config.h getopt.h gettext.h dep.h
+
+2）为增加可读性，1个规则拆分成多行，如
+vpath.o: vpath.c make.h config.h getopt.h gettext.h dep.h
+vpath.o: filedef.h hash.h job.h commands.h variable.h vpath.h
+make每遇到1个规则，将其依赖加入到相应目标的依赖图中，如
+vpath.o: lexer.c                            # 确保lexer.c在编译vpath.c之前创建
+...
+vpath.o: vpath.c                            # 编译vpath.c
+    $(COMPILE.c) $(RULE_FLAGS) $(OUTPUT_OPTION) $<
+
+3）通配符（Wildcards）
+make的通配符类似Bourne Shell：~, *, ?, [...], 和 [^...]， ~代表当前用户home目录，如：~/yuhao
+
+4）Phony目标（Phony Targets）
+Phony目标总被认为是过时的(outdated)。如：即使clean文件已经存在，make clean时clean目标的命令仍会执行。
+.PHONY: clean
+clean:
+    rm -f *.o lexer.c
+[技巧]：Phony目标也可作为其它目录的依赖（就像提取子函数一样）以免重复
+.PHONY: make-documentation
+make-documentation: df
+    javadoc ...
+.PHONY: df
+df:
+    df -k . | awk 'NR == 2 { printf( "%d available\n", $4 ) }'
+
+5）空目标（Empty Targets）
+[技巧]：空目录也即空文件，它的时间戳可用来标记上次某个事件发生过。如：
+prog: size prog.o
+    $(CC) $(LDFLAGS) -o $@ $^
+size: prog.o                        # 只有在prog.o更新后，才会执行此规则
+    size $^
+    touch size
+    
+3. 变量（Variables）
+最简单的语法：$(variable-name)
+注：一般对变量的引用使用符号：$()和${}，如果变量名是单个字符，也可直接使用符号：$
+注：Shell中一般对变量的引用为$variable或${variable}，不要引起混淆！
+1）自动变量（Automatic Variables）
+7个主要的自动变量：
+$@  -- 目标                    [记]
+$%  -- Archive文件的成员文件（参见12例子）
+$<  -- 第1个依赖               [记]
+$?  -- 所有比目标新的依赖       [记]
+$^  -- 所有依赖（去除重复）     [记]
+$+  -- 所有依赖（包括重复）
+$*  -- 目标（去附去后辍名）
+除此之外，以上每个变量有两个变体（为兼容其它make）指代值的目录部分和文件部分。如：
+$(@D) -- 指目标值的目录
+$(<D) -- 指第一个依赖值的目录
+$(@F) -- 指目标值的目录
+$(<F) -- 指第一个依赖值的文件
+
+4. 使用VPATH和vpath搜索文件
+缺省情况下，make搜索当前目录。VPATH告诉make在搜索src目标（如果当前目录下未找到），如：
+VPATH = src
+更精准的指定可使用vpath，语法如下：
+vpath pattern directory-list
+如：
+vpath %.c src               # 指示在src目标下搜索.c文件
+vpath %.l src               # 指示在src目标下搜索.l文件
+vpath %.h include           # 指示在include目标下搜索.h文件
+注：模式中使用%代表文件去掉后辍的部分，下同。
+
+5. 模式规则（Pattern Rules）
+make所有内建（build-in）规则是模式规则，模式中的%近似于Unix Shell的*，可代表任意字符串。
+%可放在模式的任意位置，但只能出现一次，如：
+%,v
+s%.o
+wrapper_%
+模式规则的例子：
+%: %.cpp
+    $(LINK.cpp) $^ $(LOADLIBES) $(LDLIBS) -o $@
+%: %.sh
+    cat $< >$@
+    chmod a+x $@
+    
+注：模式规则可看成是一类规则的简写（写一个规则就代替换了写多个规则，这些规则的命令是相似的）
+
+6．静态模式规则（Static Pattern Rules）
+静态模式与一般模式类似，只是将规则局限于$(OBJECTS)指定的文件范围内。
+$(OBJECTS): %.o: %.c
+    $(CC) -c $(CFLAGS) $< -o $@
+    
+7．后辍规则（Suffix Rules）
+后辍规则是定义隐式规则较老的方式，现在不推荐使用，但应该要看得懂。
+例1：（双后辍）
+.c.o:                                       
+    $(COMPILE.c) $(OUTPUT_OPTION) $<
+等价于：
+%.o: %.c
+    $(COMPILE.c) $(OUTPUT_OPTION) $<
+例2：（单后辍）
+.p:
+    $(LINK.p) $^ $(LOADLIBES) $(LDLIBS) -o $@
+等价于：
+%: %.p
+    $(LINK.p) $^ $(LOADLIBES) $(LDLIBS) -o $@
+注：
+所有后辍，必须是make认识的，已知的后辍用.SUFFIXES指明，如下是一部分：
+.SUFFIXES: .out .a .ln .o .c .cc .C .cpp .p .f .F .r .y .l
+可在makefile中简单的增加一个.SUFFIXES规则来添加自定义的后辍
+.SUFFIXES: .pdf .fo .html .xml
+如果想删除所有已知后辍, 可简单地将依赖置为空即可：
+.SUFFIXES:
+
+8．隐式规则数据库（The Implicit Rules Database）
+GNU make 3.80有大约90个内建隐式规则，使用make -p可显示之。
+当目标没有显示规则时，make搜索隐式规则数据库中的模式以匹配目标。
+如果目标匹配，但依赖不存在，make将依赖看作目标，递归搜索匹配此依赖的模式。
+如果不想使用隐式规则，可使用没有命令的规则将其从隐式规则数据库移除。如：
+%.o: %.l
+%.c: %.l
+隐式规则很容易用户化，如：
+%.o: %.c
+    $(COMPILE.c) $(OUTPUT_OPTION) $<
+可更CC, OUTPUT_OPTION变量来用户化
+COMPILE.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
+CC = gcc
+OUTPUT_OPTION = -o $@
+
+9. 一个简单的帮助命令
+直接从make规则数据库收集变量命令
+.PHONY: help
+help:
+    @$(MAKE) --print-data-base --question no-such-target | \
+    $(GREP) -v -e '^no-such-target' -e '^makefile' | \
+    $(AWK) '/^[^.%][-A-Za-z0-9_]*:/ \
+    { print substr($$1, 1, length($$1)-1) }' | \
+    $(SORT) | \
+    $(PR) --omit-pagination --width=80 --columns=4 \
+
+10. 特殊目标（Special Targets）
+特殊目标（如.PHONY）是make的内建phony目标，用于改变make的缺省行为。
+有用的几个特殊目录
+.INTERMEDIATE       -- 此目标的依赖被当成是中间文件，make退出时这些文件自动删除
+.SECONDARY          -- 此目标的依赖被当成是中间文件，不会被自动删除
+.PRECIOUS           -- make执行过程中被中断时会删除被更新的目标文件以回滚。此目标的依赖不会被删除
+.DELETE_ON_ERROR    -- 与.PRECIOUS相反，make出错时会删除此目标的依赖
+
+11．自动依赖生成（Automatic Dependency Generation）
+使用GCC的-M选项可生成源文件的依赖，如：
+gcc -M stdio.c  
+下面的例子中
+depend: count_words.c lexer.c counter.c
+    $(CC) -M $(CPPFLAGS) $^ > $@
+include depend                      # include指示将depend作为目标来更新
+注：一般将include放在手写的规则后面（以免被其它依赖影响）
+
+12. 管理库
+先看例子：
+libgraphics.a(bitblt.o): bitblt.o
+    $(AR) $(ARFLAGS) $@ $<
+注：libgraphics.a(bitblt.o)引用包含在库libgraphics.a中的bitblt.o模块, 
+    执行命令时$@展开成libgraphics.a, $%展开成bitblt.o
+例2：make将搜索库（先.so后.a），并用绝对路径替换$^中的-lX11 -lXaw。
+xpong: $(OBJECTS) -lX11 -lXaw
+    $(LINK) $^ -o $@
+    
+13．双冒号规则
+允许同一目标用不同的命令更新（依赖于哪个依赖比目标新）
+file-list:: generate-list-script
+    chmod +x $<
+    generate-list-script $(files) > file-list
+file-list:: $(files)
+    generate-list-script $(files) > file-list
+如果generate-list-script已更新，我们使它可执行，并执行它;
+如果$(files)已更新，我们直接执行脚本。
+
+14. 变量
+1）变量几乎可以包含任意字符（除了:, #和=）
+2）变量值左边的空格会被裁掉（trimmed），而右边不会。
+3）变量类型主要有两种：
+a.简单扩展变量（simply expanded variable），如：
+MAKE_DEPEND := $(CC) -M
+注：一旦make读到此行，变量右边部分立即被扩展，如果CC未定义，则替换为空（不是空格）
+b.递归扩展变量（recursively expanded variables），如：
+MAKE_DEPEND = $(CC) -M
+...
+CC = gcc
+注：只有在MAKE_DEPEND使用到时才会扩展（所以CC可以后面才定义）
+4）四种赋值（=, :=, ?=, +=）
+?=  为条件赋值（conditional variable assignment operator），只有定量未定义时（空值时不算）才设置它。如：
+OUTPUT_DIR ?= $(PROJECT_DIR)/out
++=  为追加赋值，如:
+simple := XXX 
+simple += new stuff
+注：追加简单变量可行（变量已求值），追加递归变量（会导致递归引用）
+注：区分Shell变量: 
+${val:=value} 如果value未声明或为空，则将value赋予val
+${val=value}  如果未声明，则将value赋予val
+
+5）宏
+宏是一种特殊的变量，一般用于封装命令脚本。例如：
+define create-jar
+    @echo Creating $@...
+    $(RM) $(TMP_JAR_DIR)
+    $(MKDIR) $(TMP_JAR_DIR)
+    $(CP) -r $^ $(TMP_JAR_DIR)
+    cd $(TMP_JAR_DIR) && $(JAR) $(JARFLAGS) $@ .
+    $(JAR) -ufm $@ $(MANIFEST)
+    $(RM) $(TMP_JAR_DIR)
+endef
+注：宏通过define和endef定义。define后的crate-jar为宏名。echo前的@告诉make执行时不打印执行的命令，但
+echo命令是要执行的。宏作为命令脚本时，前面应加tab，如下：
+$(UI_JAR): $(UI_CLASSES)
+    $(create-jar)
+如果将@加在整个宏前面。则此宏封装的所有命令在执行时都不被打印出来。如：
+$(UI_JAR): $(UI_CLASSES)
+    @$(create-jar)
+6）变量扩展（或展开、或求值）
+make执行分两阶段：
+a. 读取Makefile和include的子Makefile, 将变量和规则存入内部数据库并建立依赖关系图；
+b. 分析依赖关系图，决定需要更新的目标，并执行命令脚本来更新。
+立即（immediate）或延迟（deferred）展开的规则如下表：
+----------------------------------------------------------------
+Definition          Expansion of a          Expansion of b
+----------------------------------------------------------------
+a = b               Immediate               Deferred
+a ?= b              Immediate               Deferred
+a := b              Immediate               Immediate
+a += b              Immediate               Deferred or immediate
+define a            Immediate               Deferred
+b...
+b...
+endef
+----------------------------------------------------------------
+注：
+关于a += b，如果a是一个简单变量，则b立即扩展，否则延迟扩展
+关于宏，宏名a立即扩展，而命令b延迟扩展（只到在更新目标时才扩展）
+7）目标和模式特有变量（Target- and Pattern-Specific Variables）
+有时想针对某个特定的目标，定义不同的变量，如：
+gui.o: CPPFLAGS += -DUSE_NEW_MALLOC=1
+gui.o: gui.h
+这样在更新目标gui.o时，CPPFLAGS将增加-DUSE_NEW_MALLOC=1选项
+注：gui.o更新后，CPPFLAGS恢复为原有值。（也可理解为专门针对gui.o目标建立了一个不同的CPPFLAGS变量）
+模式特有变量类似理解。
+8）变量来自于哪里？
+I.文件：显然变量可以出自于Makefile或include的文件中。
+II.命令行：变量可以在命令行中定义或重定义（通过:=、=分别设置简单、递归变量）。如：
+$ make CFLAGS=-g CPPFLAGS='-DBSD -DDEBUG' 
+可使用override重写命令行变量（但不推荐）如：
+override LDFLAGS = -EB
+III.环境变量：所有环境变量在make中可用，但优先级很低。所以Makefile中对环境变量赋值会重写它，
+可以用--environment-overrides或-e使环境变量重写Makefile变量。缺省下，父Makefile仅将环境
+变量传递给子Makefile, 使用export可将其它变量导出到子Makefile的环境中，如
+export CLASSPATH := $(HOME)/classes:$(PROJECT)/classes
+或者直接一句，export将所有变量导出到子Makefile的环境中。
+当然也可使用unexport阻止导出，如：
+unexport DISPLAY
+IV. 自动（Automatic）：make在执行命令脚本之前创建自动变量。
+
+15. 条件和include预处理（Conditional and include Processing）
+1）条件处理
+基本语法：
+if-condition
+    text if the condition is true
+endif
+或
+if-condition
+    text if the condition is true
+else
+    text if the condition is false
+endif
+其中if-condition可以是：
+ifdef variable-name
+ifndef variable-name
+ifeq test
+ifneq test
+前两个测试是否定义，后两个测试是否相等。
+注：相等测试写法：
+ifeq "a" "b"
+ifeq (a,b)
+推荐一般用单或双引号，下面的测试并不相等：
+ifeq ( b, b )
+因为' b' != 'b '
+2）include指示符
+include后可接任意数量的文件、shell通配符，make变量。
+注：
+a. 当make遇到include指示符时, 扩展通配符和变量，然后读取include的文件。
+b. 如果文件存在。则继续正常流程；
+   如文件不存在，make报告问题，继续读取Makefile的剩余部分。读取完成后，make在规则数据库中搜寻规则来创建include的文件。
+c. 所有这些完成之后，make清除规则数据库，重新开始读取include的文件（此时如果include文件还是不存在，make就要报错啦！）
+问题：make在哪里搜寻include的文件呢？
+答：make依次搜索：当前目录、--include-dir(或-I)选项指示的目录、编译搜索目标（如：/usr/local/include, /usr/gnu/include, /usr/include）
+相要make忽略不能加载（load）的文件可使用-include, 如：
+-include i-may-not-exist.mk
+值得注意的是，将include放在Makefile的开头并不是一个好的相法（它可能改变缺省目标）
+3）标准make变量（Standard make Variables）
+MAKE_VERSION    -- 版本号，如3.80
+CURDIR          -- 当前工作目录（shell的pwd），使用--directory=directory-name或 -C directory-name可以改变
+MAKEFILE_LIST   -- Makefile列表（当前Makefile始终是MAKEFILE_LIST的最后一项）
+MAKECMDGOALS    -- make命令行中指定的目标列表
+.VARIABLES      -- 所有make已读取到的变量列表
+
+16 函数
+1) 内置函数
+调用方式：
+$(function-name　arg1,[arg2...])
+注：第一个参数前面的空格用于与函数名分开，后面的空格会保留的，后面其它参数的前后空格都会保留！！！
+2) 常见内置函数
+a) 字符串函数数
+$(filter pattern, text)        // 将text视为空格分隔的单词，与patten匹配的单词返回，返回的单词列表以空格分隔
+                               // 注意pattern匹配整个单词才算匹配（如：%bc不能匹配abcd）
+$(filter-out pattern, text)    // 与filter相反，选出不匹配模式的单词
+
+$(findstring substr, text)     // 在text中查找子串substr,找到则返回，否则返回空，注，substr不能使用％通配符
+$(subst str1, str2, text)      // 将text中的所有str1替换为str2, 注：不能使用通配符
+$(patsubst pat1, pat2, text)   // 将text中的pat1替换为pat2, 注：模式pat1必须匹配text中单词的整个部分
+$(variable:search＝replace)    // 如果search中包含通配符％，则与patsubst类似，否则search必须与单词末尾匹配
+
+$(words text)                  // 返回text中单词个数
+$(words n,text)                // 返回text中第n个单词（单词索引从１开始），如果n大于单词个数，返回空
+$(firstword text)              // 返回text中第1个单词, 等同于$(words 1,text)
+$(wordlist start, end, text)   // 返回text中[start, end]范围的单词（注：end大于单词个数n, 返回[start, n], start大于n返回空)
+
+b) 重要的杂项函数
+$(sort text)                    // 对text中的单词依字典序排序，去掉重复选项
+$(shell commands)               // 在子shell中执行commands，返回commands执行后的标准输出的内容（换行符用空格替换）注：不返回标准错误输出
+
+c) 文件名函数
+$(wildcard pattern)             // 依据模式pattern返回匹配的文件名，如$(wildcard *.h *.cpp)返回当前目录下所有.h和.cpp文件
+$(dir text)                     // 取text中每个路径的目录部分（最后一个/之前的部分，若没有，则返回./）
+$(notdir text)                  // 取text中每个路径的文件部分（最后一个/之后的部分，若没有，则返回整个路径）
+
+$(suffix text)                 // 返回text中每个路径的后辍
+$(basename text)               // 与suffix刚好相反，返回text中每个路径中除去后辍的部分
+
+$(addsuffix suffix,text)       // 为text中每个单词添加后辍
+$(addprefix prefix,text)       // 为text中每个单词添加前辍
+$(join prefix-list, suffix-list)   // 顾名思义，将prefix-list与suffix-list的相对应的元素连接在一起，依次类推
+
+d) 流程控制
+$(if condition,then-part,els-part) // 如果condition扩展后不为空，则返回then-part,否则返回else-part
+$(if condition, then-part)         // 可以没有else-part部分，此时若condition扩展后为空，则返回值为空
+$(error msg)                    // 输出msg后，make以返回值2退出
+$(foreach var,list,body)        // 对list中每个var执行body, 返回值为所有body执行后的输出（以空格区分）
+
+e)杂项
+$(strip text)                   // 去掉text前后空格(中间的多个空白字符（如tab换行等）换成一个空格）
+$(origin var)                   // 返回变量var的来源，返回值（undefined, default, environment, file, .....)
+$(warning msg)                  // 类似于$(error err-msg)函数，只不过不退出
+$(call macro-name,parm1,parm2...) // call函数实质是一种宏扩展，将$(1)扩展成param1, $(2)扩展成param2
+
+17 命令
+make命令实质上一个单行Shell脚本，make获取每行Shell命令，并将其交给subshell执行. 
+@、 -、 + 三个命令修饰符号可加在命令前，其意义如下：
+@　不输出命令(默认情况下命令会输出，也可将目标设置为.SILENT的依赖)
+-　忽略命令中的错误（可使用make --ignore-errors或-i忽略命令执行的中错误，而继续执行）
++  要求make执行命令（即使make --just-print或-n，也会执行命令）
+1) 错误与中断
+当make执行命令时出错时，make会停止执行返回2的退出码，如果想让make继续执行，可使用make --keep-going或-k选项
+2) 删除与保存目标文件
+当目标设置成.DELETE_ON_ERROR的依赖时,当生成目标的命令出错时，会删除生成的中间文件。
+如果.DELETE_ON_ERROR没有任何依赖，则在生成任何目标时, 命令出错都会删除相应的文件。
+当目标设置成.PRECIOUS的依赖时，刚好相反，命令出错时，不会删除相应文件
+3) 使用哪个Shell
+make默认使用/bin/sh作为其执行命令的Shell, 可通过SHELL变量更改
+4）命令环境
+make执行命令时会从make本身继承环境, 包括：当前工作目录，文件描述符，以及make传递的环境变量
+当一个subshell被创建时，make会加入若干变量加入环境：
+MAKEFLAGS   包含你传递给make的命令行选项
+MFLAGS      是MAKEFLAGS的拷贝，为兼容老版本
+MAKELEVEL   当make递规调用make时，MAKELEVEL的值加１
+5) 对命令脚本求值
+命令脚本的处理过程经历四个步骤：a)取程序代码、b)扩展变量、c)表达式求值，d)执行命令
+6) 区分符号：$ 和 $$
+make对变量的引用一般使用$, 如果要表示的值为$, 则需使用两个$$符号。值得注意的是Shell中的$也用于引用Shell变量
+为了区分是make变量还是Shell变量，一般Shell变量前加$$, 这样make变量先扩展后，再传递一个$给Shell扩展：）, 如：
+SRC := a.c b.c
+target: 
+    for f in $(SRC); do echo $$f; done  // 则经make扩展后的命令为for f in a.c b.c; echo $f done
+
+18 调试技术
+1) 利用make的命令选项
+-n, --just-print        // 只输出命令，而不执行（某些情况下会调用shell函数求值）
+-p, --print-data-base   // 打印make的内部数据库
+--debug[=FLAGS]         // FLAGS可以是basic, verbose, implicit, jobs, all(所有前面４种), makefile
+-d                      // 相当于--debug=all
+2) 使用warning函数
+warning函数会被扩展成空字符串，几何可以放在makefile的任务地方输出变量值
+3) 良好的编码习惯
+
+
+
+
+
+

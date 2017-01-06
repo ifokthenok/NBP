@@ -1,0 +1,149 @@
+---------------------------vim使用方法---------------------------
+vi: Visual Editor
+vim: VI Improved
+
+vi工作模式：
+命令模式(Command Mode) 
+输入模式(Input Mode)
+Last Line模式(Last Line Mode)
+模式转换：
+命令模式　 -- Insert/Append/Open/Replace/Change操作 ->　输入模式
+命令模式　 <- 按ESC键                               --　输入模式
+命令模式　 -- 按:键                                 ->　 Last Line模式
+命令模式　 <- 按Enter键                             --　 Last Line模式
+
+例如：
+命令模式下按i或a进入Insert输入模式，　输入模式下按ESC回到命令模式
+命令模式下按v或V,或Ctrl+v进入Visul选择输入模式，Last Line模式下按Enter回到命令模式
+命令模式下按：进入Last　Line模式（可以输入vi命令)，Last Line模式下按Enter回到命令模式
+
+选择
+v   进入VISUAL选择，按上下左右箭头键完成选择，放弃已选内空可按v
+V   整行选择
+ctrl+v 整块选择
+
+选择后，按y复制，或按d剪贴，最后按p粘贴
+
+插入文本
+i 在光标前插入(Insert)，　I 行首插入
+a 在光标后插入(Append)，　A 行尾插入
+o 在光标所在行之后插入空行，　Ｏ 在光标所在行之前插入空行
+
+增加删除注释技巧
+删除注释：ctr+v, 选择注释块，按x
+增加注释：ctr+v, 选择需注释块，按shift+i (I行首插入)，输入//或#, 按esc
+
+
+删除
+x 　删除光标下的字符，　X 删除光标前的字符
+dd　删除１行，　ndd删除n行
+dw 删除至单词
+C  删除至行尾
+D  删除至行尾
+
+复制
+yy 复制１行，nyy复制n行
+yw 复制１单词
+
+粘贴
+p 粘贴（复制或剪贴的内容，如yy, dd操作后内容）
+
+撤消与重复
+u 撤消上次操作
+. 重复上次操作
+
+查找命令
+/<text> 向后向查找<text>, 找到后，按n定位下一个查找结果，按Ｎ定位上一个查找结果
+?<text> 前向查找<text>
+
+打开、保存、退出
+w 保存当前
+wq 保存前退出
+q! 不保存退出
+w <filename>    另存为<filename>
+e <filename>    打开<filename> (当前文件需保存)
+r <filename>    读入<filename>内容到当前位置后
+
+移动光标
+上、下、左、右键头
+w 单词为单位向后移动
+b 以单词为单位向前移动
+
+
+搜索并替换
+语法：
+:[range]s[ubstitute]/<pattern>/<string>/[flags] [count]
+
+range:
+number  指定行号, number从1开始编号，如1,100表示1~100行　
+.       当前行
+$       最后行
+%       所有行，相当于1,$
+'<,'>   表示VISUAL选择区域
+
+flags:
+c     确认（Confirm）每个匹配的替换
+g     替换行中所有匹配（没有g只替换每一个匹配）
+i     忽略<pattern>大小写
+I     与i相反，<pattern>大小写敏感
+
+pattern:
+基本与正则表式写法相同，除特殊情况：
+1)
+\<  表示单词的左边界  
+\>  表示单词的右边界
+如：
+s/vi/VI/g       将所有vi替换为VIM（如：visual替换为VIsual）
+s/\<vi\>/VI/g   将所有vi单词替换为VI(如：visual不被替换)
+
+2) 重复（写法上以\开头, 缺省为贪婪模式，-表示非贪婪模式）
+*       重复0次以上          \{-}
+\+      重复1次以上
+\=      重复0或１次
+\{n,m}  重复m~n次　          \{-n, m}
+\{n}    重复n次    
+\{,m}　　　重复最多m次          \{, -m}
+\{n,}   重复至少n次          \{-n, }
+
+3) group应写在\(和\)之间, 也就是说括号()需要转义
+\(\<\w\+\>\)\s*\<\1\>   匹配重复的单词
+
+全局搜索并执行命令
+语法：
+:range g[lobal][!]/<pattern>/cmd
+其中：
+range 指定搜索行范围
+!     <pattern>不匹配的行
+<cmd> vi命令模式支持的命令均可（如：s[ubstitute], :co[py] , :d[elete], :w[rite]), 缺省命令为:p（打印匹配行）
+
+---------------------------vim配置---------------------------     
+1、配置文件的位置
+  Ubuntu中运行sudo apt-get install vim即可安装
+	在目录 /etc/vim 下面，有个名为vimrc的文件，这是系统中公共的vim配置文件，对所有用户都有效。
+	而在每个用户的主目录下，都可以自己建立私有的配置文件，命名为：“.vimrc”。
+	例如，/root目录下，通常已经存在一个.vimrc文件。
+2、设置语法高亮显示
+	1) 打开vimrc，添加以下语句来使得语法高亮显示：
+	  syntax on
+
+	2) 如果此时语法还是没有高亮显示，那么在/etc目录下的profile文件中添加以下语句：
+	  export TERM=xterm-color
+
+3、设置Windows风格的C/C++自动缩进（添加以下set语句到vimrc中）
+   1）设置（软）制表符宽度为4：
+       set tabstop=4
+       set softtabstop=4
+   2）设置缩进的空格数为4
+       set shiftwidth=4
+   3）设置自动缩进：即每行的缩进值与上一行相等；使用 noautoindent 取消设置：
+       set autoindent
+   4）设置使用 C/C++ 语言的自动缩进方式：
+       set cindent
+   5）如果想在左侧显示文本的行号，可以用以下语句：
+       set nu
+   6）最后，如果没有下列语句，就加上吧：
+	    if &term=="xterm"
+	        set t_Co=8
+	        set t_Sb=^[[4%dm
+	        set t_Sf=^[[3%dm
+	    endif

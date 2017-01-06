@@ -1,0 +1,19 @@
+1. autoconfig/automake使用步骤
+1) 源码根目录调用autoscan脚本，生成configure.scan文件，将此文件重命名为configure.ac(或configure.in,早期使用.in后缀)
+2)【修改】configure.ac，利用autoconf提供的各种M4宏，配置项目需要的各种自动化探测项目
+3) 调用aclocal收集configure.ac中用到的各种非autoconf的宏，包括【自定义宏】
+4) 调用autoheader，扫描configure.ac(或configure.in)、acconfig.h（如果存在），生成config.h.in宏定义文件，里面主要是
+   根据configure.ac中某些特定宏(如AC_DEFINE)生成的#define和#undefine宏，configure在将根据实际的探测结果决定这些宏是否定义。
+5) 按照automake规定的规则和项目的目录结构，【编写】一个或多个Makefile.am(Makefile.am数目和存放位置和源码目录结构相关)，
+   Makefile.am主要写的就是编译的目标及其源码组成。
+6) 调用automake，将每个Makefile.am转化成Makefile.in，同时生成满足GNU编码规范的一系列文件（带-a选项自动添加缺少的文件，但有
+   几个仍需要自己添加，在执行automake前需执行touch NEWS README AUTHORS ChangeLog）。如果configure.ac配置了使用libtool
+   (定义了AC_PROG_LIBTOOL宏（老版本）或LT_INIT宏)，需要在此步骤前先在项目根目录执行libtoolize --automake --copy --force，
+   以生成ltmain.sh，供automake和config.status调用。
+7. 调用autoconf，利用M4解析configure.ac，生成shell脚本configure
+8. 开源用户调用configure生成Makefile，然后make && make install
+
+注：
+1) 上述过程共有8步，其中2)3)5)需要手动修改，其它只须照着执行命令即可
+2) 摘自：http://blog.csdn.net/yunhua_lee/article/details/6172614
+

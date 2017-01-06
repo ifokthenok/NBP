@@ -1,0 +1,439 @@
+Linux进程间通信：信号、共享内存、消息队列
+
+1）信号（Semaphores）
+#include <sys/sem.h>
+
+// 获取一个与key相联系的信号集标识符, 创建一个信号集（如果key为IPC_PRIVATE
+// 或者key标识的信号集不存在且指定了IPC_CREAT）
+// 如果key标识的信号集已经存存，且指定了O_CREAT | O_EXCL标识，函数失败（errno设为EEXIST）
+// key: 可理解成资源的标识
+// num_sems: 信号的个数
+// sem_flags：信号标识: 低9位权限 | O_CREAT, O_EXCL,...
+int semget(key_t key, int num_sems, int sem_flags);
+
+// 操作信号集
+// sem_id: 信号集标识符
+// num_sem_ops： 数组元素个数
+// sem_ops: 信号操作数组, sembuf 结构体至少包括：
+// 					short sem_num: 信号索引（指对第sem_num个信号进行操作）
+// 					short sem_op:  信号改变量（ +1：相当于V操作， -1相当于P操作） 
+// 					short sem_flg: 一般设为SEM_UNDO允许进程结束时系统自动释放信号量资源
+int semop(int sem_id, struct sembuf *sem_ops, size_t num_sem_ops);
+
+
+// 对信号量进行控制 
+// sem_id: 信号集标识符
+// sem_num: 信号索引
+// command：操作命令
+int semctl(int sem_id, int sem_num, int command, ...);
+
+注：第4个参数（如果存在的话）为
+union semun {
+    int              val;    // Value  for SETVAL
+    struct semid_ds *buf;    // Buffer for IPC_STAT, IPC_SET
+    unsigned short  *array;  // Array  for GETALL, SETALL
+    struct seminfo  *__buf;  // Buffer for IPC_INFO
+};
+此处介绍两个命令：
+SETVAL：  用于初始化信号量的值（由semun中的val指定）
+IPC_RMID：用于删除信号集
+
+
+2）共享内存（Shared Memory）
+#include <sys/shm.h>
+
+// 创建共享内存（key为IPC_PRIVATE表仅在创建进程内共享）
+// key:  命名共享内存
+// size: 共享内存的大小
+// shmflg: 权限标识 | IPC_CREAT，...
+// 返回共享内存标识符（供其它函数使用）
+int shmget(key_t key, size_t size, int shmflg);
+
+// 映射（Attach）到当前进程的地址空间
+// shm_id: 共享内存标识符
+// shm_addr: 指定地扯（一般为0，让系统指定）
+// shmflg: SHM_RND（使用shm_addr指定的地址），SHM_RDONLY（只读）
+// 成功返回映射的地址，失败返回-1
+void *shmat(int shm_id, const void *shm_addr, int shmflg);
+
+// 取消（Detaches）映射的共享内存
+// 返回：0-成功，-1失败
+int shmdt(const void *shm_addr);
+
+// 控制共享内存
+int shmctl(int shm_id, int cmd, struct shmid_ds *buf);
+
+struct shmid_ds {
+    struct ipc_perm shm_perm;    // 拥有和权限
+    size_t          shm_segsz;   // Size of segment (bytes) 
+    time_t          shm_atime;   // Last attach time 
+    time_t          shm_dtime;   // Last detach time
+    time_t          shm_ctime;   // Last change time
+    ...
+};
+
+struct ipc_perm {
+    key_t key;            // Key supplied to shmget()
+    uid_t uid;            // Effective UID of owner
+    gid_t gid;            // Effective GID of owner
+    uid_t cuid;           // Effective UID of creator
+    gid_t cgid;           // Effective GID of creator
+    unsigned short mode;  // Permissions + SHM_DEST and SHM_LOCKED flags 
+    unsigned short seq;   //  Sequence number 
+};
+
+
+控制命令：
+IPC_STAT 获取与shm_id相联系的共享内存的信息（获取的数据由buf所指的shmid_ds结构接收）
+IPC_SET  设置与shm_id相联系的共享内存（设置数据由buf所指的shmid_ds结构指定）
+IPC_RMID 删除与shm_id相联系的共享内存
+
+示例程序
+头文件shm_com.h
+
+#define TEXT_SZ 2048
+struct shared_use_st {
+	int written_by_you;
+	char some_text[TEXT_SZ];
+};
+
+程序shm1
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include “shm_com.h”
+int main()
+{
+	int 		running = 1;
+	void*		shared_memory = (void *)0;
+	struct 	shared_use_st *shared_stuff;
+	int 		shmid;
+	srand((unsigned int)getpid());
+	// 创建（或获取已存在）1234命名的共享内存
+	shmid = shmget((key_t)1234, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
+		if (shmid == -1) {
+		fprintf(stderr, “shmget failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	
+	// 映射到当前进程地址空间
+	shared_memory = shmat(shmid, (void *)0, 0);
+	
+	if (shared_memory == (void *)-1) {
+		fprintf(stderr, “shmat failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	printf(“Memory attached at %X\n”, (int)shared_memory);
+	
+	// 以下代码读写共享内存
+	shared_stuff = (struct shared_use_st *)shared_memory;
+	shared_stuff->written_by_you = 0;
+	while(running) {
+		if (shared_stuff->written_by_you) {
+			printf(“You wrote: %s”, shared_stuff->some_text);
+			sleep( rand() % 4 );
+			shared_stuff->written_by_you = 0;
+			if (strncmp(shared_stuff->some_text, “end”, 3) == 0) {
+				running = 0;
+			}
+		}
+	}
+	
+	// 取消内存映射
+	if (shmdt(shared_memory) == -1) {
+		fprintf(stderr, “shmdt failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	
+	// 删除共享内存
+	if (shmctl(shmid, IPC_RMID, 0) == -1) {
+		fprintf(stderr, “shmctl(IPC_RMID) failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	exit(EXIT_SUCCESS);
+}
+
+程序shm2
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include “shm_com.h”
+int main()
+{
+	int 		running = 1;
+	void 		*shared_memory = (void *)0;
+	struct 	shared_use_st *shared_stuff;
+	char    buffer[BUFSIZ];
+	int     shmid;
+	
+	// 创建（或获取已存在）1234命名的共享内存
+	shmid = shmget((key_t)1234, sizeof(struct shared_use_st), 0666 | IPC_CREAT);
+	if (shmid == -1) {
+		fprintf(stderr, “shmget failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	// 映射到当前进程地址空间
+	shared_memory = shmat(shmid, (void *)0, 0);
+	if (shared_memory == (void *)-1) {
+		fprintf(stderr, “shmat failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	
+	// 以下代码读写共享内存
+	printf(“Memory attached at %X\n”, (int)shared_memory);
+	shared_stuff = (struct shared_use_st *)shared_memory;
+	while(running) {
+		while(shared_stuff->written_by_you == 1) {
+			sleep(1);
+			printf(“waiting for client...\n”);
+		}
+		printf(“Enter some text: “);
+		fgets(buffer, BUFSIZ, stdin);
+		strncpy(shared_stuff->some_text, buffer, TEXT_SZ);
+		shared_stuff->written_by_you = 1;
+		if (strncmp(buffer, “end”, 3) == 0) {
+			running = 0;
+		}
+	}
+	
+	// 取消共享内存映射
+	if (shmdt(shared_memory) == -1) {
+		fprintf(stderr, “shmdt failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	
+	exit(EXIT_SUCCESS);
+}
+输出：
+$ ./shm1 &
+[1] 294
+Memory attached at 40017000
+$ ./shm2
+Memory attached at 40017000
+Enter some text: hello
+You wrote: hello
+waiting for client...
+waiting for client...
+Enter some text: Linux!
+You wrote: Linux!
+waiting for client...
+waiting for client...
+waiting for client...
+Enter some text: end
+You wrote: end
+$
+
+3）消息队列（Message Queues）
+#include <sys/msg.h>
+
+// 创建（或获取）消息对列（与创建信号、共享内存类似）
+// key为IPC_PRIVATE表示进程私有，
+// msgflg: 权限 | IPC_CREAT,...
+// 返回队列标识
+int msgget(key_t key, int msgflg);
+
+// 向队列发送消息
+// msqid: 队列标识
+// msg_ptr：待发送的数据（必须以长整型开头long int）
+// msg_sz: 数据尺寸（不包括消息类型，也就是不包括前4字节）
+// msgflg: 控制（如队列满、到达系统限制时）行为标识。如果设置了IPC_NOWAIT（函数立即返回-1）
+//         否则函数等待直到队列中有容纳消息的空间
+// 返回：0-成功，-1失败
+int msgsnd(int msqid, const void *msg_ptr, size_t msg_sz, int msgflg);
+
+注：发送消息时应该定义如下所示的结构体
+struct my_message {
+	long int message_type;  		// 消息类型
+  ....                        // 消息数据
+} 
+
+// 从队列中接收消息
+// msqid: 队列标识
+// msg_ptr: 接收消息（必须以长整型开头long int）
+// msg_sz：消息尺寸（不包括消息类型）
+// msgtype: 消息类型（0 - 取消息队列中的第1个消息，>0 - 取消息队列中同类型的第1个消息
+//          <0 - 取消息队列中同类型或比msgtype绝对值小的类型的第1个消息
+// msgflg: 如课设置了IPC_NOWAIT标识，函数立即返回-1，否则函数等待直到队列中有消息
+// 返回-1失败，成功执行返回写入msg_ptr的字节数，并清除消息队列中相关消息
+int msgrcv(int msqid, void *msg_ptr, size_t msg_sz, long int msgtype, int msgflg);
+
+// 控制消息队列
+// msqid: 队列标识
+// command: 控制命令
+// 返回：0-成功， -1失败
+int msgctl(int msqid, int command, struct msqid_ds *buf);
+
+struct msqid_ds {
+    struct ipc_perm msg_perm;    // Ownership and permissions
+    ...
+};
+
+struct ipc_perm {
+    key_t key;            // Key supplied to msgget()
+    uid_t uid;            // Effective UID of owner 
+    gid_t gid;            // Effective GID of owner
+    uid_t cuid;           // Effective UID of creator
+    gid_t cgid;           // Effective GID of creator
+    unsigned short mode;  // Permissions
+    unsigned short seq;   // Sequence number
+};
+
+控制命令（与共享内存类似）
+IPC_STAT   获取队列信息到buf所指的msqid_ds结构中
+IPC_SET If 设置队列信息（由buf所指的msqid_ds指定）
+IPC_RMID   删除队列
+
+如果消息队列已删除，msgsnd和msgrcv的调用将失败
+
+程序msg1：
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
+struct my_msg_st {
+	long int my_msg_type;
+	char some_text[BUFSIZ];
+};
+int main()
+{
+	int running = 1;
+	int msgid;
+	struct my_msg_st some_data;
+	long int msg_to_receive = 0;
+	// 创建消息队列
+	msgid = msgget((key_t)1234, 0666 | IPC_CREAT);
+	if (msgid == -1) {
+		fprintf(stderr, “msgget failed with error: %d\n”, errno);
+		exit(EXIT_FAILURE);
+	}
+	while(running) {
+	
+	  // 从队列中取消息
+		if (msgrcv(msgid, (void *)&some_data, BUFSIZ, msg_to_receive, 0) == -1) {
+			fprintf(stderr, “msgrcv failed with error: %d\n”, errno);
+			exit(EXIT_FAILURE);
+		}
+		
+		printf(“You wrote: %s”, some_data.some_text);
+		if (strncmp(some_data.some_text, “end”, 3) == 0) {
+			running = 0;
+		}
+	}
+	
+	// 删除消息队列
+	if (msgctl(msgid, IPC_RMID, 0) == -1) {
+		fprintf(stderr, “msgctl(IPC_RMID) failed\n”);
+		exit(EXIT_FAILURE);
+	}
+	exit(EXIT_SUCCESS);
+}
+
+程序msg2:
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#define MAX_TEXT 512
+struct my_msg_st {
+	long int my_msg_type;
+	char some_text[MAX_TEXT];
+};
+int main()
+{
+	int running = 1;
+	struct my_msg_st some_data;
+	int msgid;
+	char buffer[BUFSIZ];
+	
+	// 创建或获取消息队列
+	msgid = msgget((key_t)1234, 0666 | IPC_CREAT);
+	if (msgid == -1) {
+		fprintf(stderr, “msgget failed with error: %d\n”, errno);
+		exit(EXIT_FAILURE);
+	}
+	while(running) {
+		printf(“Enter some text: “);
+		fgets(buffer, BUFSIZ, stdin);
+		some_data.my_msg_type = 1;
+		strcpy(some_data.some_text, buffer);
+		
+		// 向队列发送消息
+		if (msgsnd(msgid, (void *)&some_data, MAX_TEXT, 0) == -1) {
+			fprintf(stderr, “msgsnd failed\n”);
+			exit(EXIT_FAILURE);
+		}
+		if (strncmp(buffer, “end”, 3) == 0) {
+			running = 0;
+		}
+	}
+	exit(EXIT_SUCCESS);
+}
+
+输出：
+$ ./msg2
+Enter some text: hello
+Enter some text: How are you today?
+Enter some text: end
+$ ./msg1
+You wrote: hello
+You wrote: How are you today?
+You wrote: end
+$
+
+4）IPC状态命令（IPC Status Commands）
+
+a. ipcs命令（查看系统IPC状态信息）
+语法：
+ ipcs [ -asmq ] [ -tclup ]
+ ipcs [ -smq ] -i id
+ 
+选项：
+ -s 信号量
+ -m 共享内存
+ -q 消息队列
+ -a 所有
+ -i 仅显示指定id的对象的信息
+ 
+ -t     显示时间
+ -p     显示PID
+ -c     创建（creator）
+ -l     限制（limits)
+ -u     总计（summary)
+
+b. rpcrm命令（删除信息量，共享内存，消息队列）
+
+语法：
+	ipcrm [ -M key | -m id | -Q key | -q id | -S key | -s id ]...
+
+选项：
+ -S 信息量key
+ -s 信号量
+ -M 共享内存key
+ -m 共享内存
+ -Q 消息队列key
+ -q 消息队列
+ 
+例子：
+ipcs -m   		// 查看共享内存
+ipcs -s   		// 查看信息量
+ipcs -q   		// 查看消息队列
+
+ipcrm -m 666  // 册除id为666的共享内存对象
+ipcrm -s 777  // 删除id为777的信号量对象

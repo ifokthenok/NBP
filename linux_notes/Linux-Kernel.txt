@@ -1,0 +1,59 @@
+1. Linux kernel 编译
+－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－－
+1) 配置
+$ make menuconfig   // 有1000多个配置选项: []表示2选1(Y-编进内核 N-不编译), <>表示3选1(Y-编进内核 N-不编译 M-编成模块.ko)  
+注:
+0) 除make menuconfig外, 当然还有make config, make xconfig等类似配置工具, 
+1) make menuconfig时需要指定ARCH, 如: export ARCH=arm 或make ARCH=arm menuconfig.
+2) 配置完成后生成.config文件(make依据此文件来build内核, 其实上可直接修改此文件)
+3) 可在arch/arm/configs/下找到针对不同板子的缺省默认文件(如omap1_defconfig, 将此文件改成.config
+或者make omap1_defconfig, 或者在make menuconfig菜引单中选择加载此配置文件即)
+ 
+
+2) 编译
+编译时至少应该指定以下两个环境变量(当然这两变量可export到当前Shell也可在make命令中指定)
+ARCH=arm                                        // 硬件架构, 如: arm, x86, x86-64,...
+CROSS_COMPILE=/corss/compiler/prefix/path       // 交叉编译器前辍, 如: make使用$(CROSS_COMPILE)gcc表示gcc所在路径
+make menuconfig                                 // 配置(生成.config文件)
+make dep                                        // 建立配置依赖
+make zImage                                     // 压缩的镜像
+make uImage                                     // 建立uboot启动镜像(路径如: arch/arm/boot/uImage)
+make modules                                    // 建立modules
+make modules_install                            // 安装modules(可通INSTALL_MOD_DIR=<xxx>指定安装路径)
+
+3) 定制
+比如针对arm处理器匹配omap2类型的板子的BSP源码放在arch/arm/match-omap2/目录下
+例如ti公司omap5板子初始化的代码实现文件: arch/arm/arm/mach-omap2/board-omap5.c
+
+4) 新增驱动模块
+新写的驱动模块一般应提供如下两个文件:
+Kconfig         // 此文件为新增模板的配置文件, 一般将其加入到上一级的Kconfig中
+Makefile        // 此文件依据配置选项决定如何编译(如哪些文件需要编译, 编译成模块还是编进内核等)
+
+5) Uboot与Linux内核的机器码(两者需要,才能启动)
+u-boot的机器码是在u-boot/include/asm-arm/mach-types.h
+Linux内核的机器码定义在arch/arm/tools/mach-types
+Linux内核机器码一般在BSP的初始化文件中通过MACHINE_START/MACHINE_END宏指定:
+MACHINE_START(MINI2440, "Mini2440 board")       // 在mach-types.h查找MACH_TYPE_MINI2440的值便是机器码
+    .phys_io        = S3C2410_PA_UART,
+    .io_pg_offst    = (((u32)S3C24XX_VA_UART) >> 18) & 0xfffc,
+    .boot_params    = S3C2410_SDRAM_PA + 0x100,
+    .init_irq       = s3c24xx_init_irq,
+    .map_io         = mini2440_map_io,
+    .init_machine   = mini2440_machine_init,    // 机器初台化执行的函数
+    .timer          = &s3c24xx_timer,
+MACHINE_END
+
+这两宏定义了一个全局machine_desc结构变量,并放在section(".arch.info.init")供内核启动读取
+#define MACHINE_START(_type,_name) \
+static const struct machine_desc __mach_desc_##_type \
+ __used \
+ __attribute__((__section__(".arch.info.init"))) = { \
+.nr = MACH_TYPE_##_type, \
+.name = _name,
+
+#define MACHINE_END \
+};
+
+
+

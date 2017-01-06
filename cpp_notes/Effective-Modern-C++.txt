@@ -1,0 +1,61 @@
+Effective Modern C++
+---------------------------------------------------------------------------------------------------
+第１章：类型推导（Deducing Types）
+   条款1：理解模板类型推导（通过实参arg推导形参T的情形：指针或引用f(const T& arg), 值传递f(T arg), 通用(forwarding)引用f(T&& arg)，推导时数组或函数退化为指针）
+   条款2：理解auto类型推导（基本与模板类型推导相同，但{...}形式推导为std::initializer_list, auto作为函数返回值或lambda参数时推导方式与模板相同）
+   条款3：理解decltype（T的左值表达式如(T)推导为T&, C++14支持decltype(auto)）
+   条款4：懂得如何查看推导的类型（方法包括：IDE提示/编译错误消息/Boost TypeIndex，但这些方法可能都不准确）
+
+第2章：auto
+   条款5：优先选择auto而不是显示类型声明
+   条款6：如果auto推导的类型不是所期望的，使用显示类型初始化惯用法
+
+第3章：转向现代C++(Moving to Moden C++)
+    条款7：创建对象时区分()和{}（{}区配std::initializer_list, 可阻止narrowing conversions. ）
+    条款8：优选nullptr而不是0或NULL（nullptr的类型为std::nullptr_t，可隐式转化为raw pointer类型）
+    条款9：优选alias而不是typedef（typedef不支持templatization，使用typedef定义的模板时，需要typename前辍和::type后辍, alias即using语法可简化使用）
+    条款10：优选scoped enum而不是unscoped enum（都支持指定underling type, C++98 enum是scoped, c++11中unscoped enum可用，例如enum class Status: std::uint32_t {}）
+    条款11：优选deleted不而是private undefined函数（任何函数都可以是deleted, 包括非成员函数和template　instantiations）
+    条款12：使用override声明覆盖函数(overriding functions) （C++11两个新关键字: override用于覆盖虚函数，出错时编译器时就会提醒; final修饰函数表不能覆盖，修饰class表不能继承）
+    条款13：优选const_iterator而不是iterator（cbegin()/cend()返回const_iterator）
+    条款14：用noexcept修饰(如果函数不抛异常)（noexcept是函数接口的一部分，可以被优化）
+    条款15：尽量使用constexpr（constexpr对象是编译时初始化的，具有const特性；const函数结果编译时决定；constexpr是对象或函数接口的一部分）
+    条款16：使const成员函数线程安全（前提当然是并发情况；单变量同步可优选std::atomic；多变量同步时然std::mutex可能会好些）
+    条款17：理解特殊成员函数的生成（以前4个，c++11新增两个move操作: move-construct/assignment；1.move操作只有无显示声明move操作/copy操作/destructor时才产生；
+            2.声明了move操作就不会生成copy操作；3.成员函数模板不会阻止特殊成员函数的生成）
+
+第4章：智能指针(Smart pointer)
+    条款18：std::unique_ptr用于exclusive-ownership资源管理（不能copy, 只能move-only，可接custom deteter,　空易转化为std::shared_ptr）
+    条款19：std::shared_ptr用于shared-ownership资源管理(std::shared_ptr拥有control block,其size大约是std::unique_ptr的两倍)
+    条款20：std::weak_ptr用于std::shared_ptr-like可能会dangle(悬空)的情况（可用于Caching, Observer list, 防止std::shared_ptr循环引用以及引用dangle）
+    条款21：优选std::make_unique和std::make_shared而不是直接使用new（优点：异常安全、高效－对象与控制块一次分配；不足：无法指定custom deleter、难以传递初始化列表参数方式构造对象）
+    条款22：使用Pimpl方案时在实现文件中定义特殊成员函数（使用std::unique_ptr实现pImpl时若不在头文件中声明析构函数，可能导致编译错误, 此条不适用于std::shared_ptr）
+
+
+第5章：右值引用(Rvalue References)，Move语义(Move Semantics)，完美转化(Perfect Forwarding)
+    条款23：理解std::move和std::forward（前者无条转换为rvalue, 后者用在模板推导（通用引用T&&）时完美转换，非模板情况下，两者技术上几乎相等）
+    条款24：区分universal引用和rvalue引用（很简单，需要推导的auto&&或T&&是universal引用，确定类型如type&&（或类型推导不存在时）是rvalue引用）
+    条款25：在rvalue引用上使用std::move, 在通用引用上使用std::forword（不要将std::move和std::forward用于local object，因为编译器可能应用返回值优化RVO）
+    条款26：避免重载通用引用（overloading on universal references）（即不要写与通用引用版本同名重载函数）
+    条款27：熟悉universal引用重载的替代方案
+    条款28：理解引用collapsing（发生在四种情况：template instantiation, auto type, typedef和using, decltype；引用collapsing时只要有一个为lvalue引用，结果便是lvaue）
+    条款29：假设move操作not present, not cheap和not used（）
+    条款30：熟悉perfect forwarding失败的情况（）
+
+第6章：Lambda表达式
+    条款31：避免缺省capture模式（缺省reference捕获可能导致dangling引用; 缺省value捕获可能导致dangling针指,如this指针，注意static或全局变量的捕获）
+    条款32：closures中使用init方式捕获move对象（）
+    条款33：用decltype作用auto&&参数并应用到std::forward（例如：auto f=[](auto&&... params) { return operation(std::forward<decltype(params)>(params)...); }）
+    条款34：优选lamdas而不是std::bind（lamdas在可读性/表达性/有效性占优；std::bind可用于move capture，或bind模板调用操作符templatized function call operators）
+
+第7章：并行API
+    条款35：优选基于task-based编程而不是thread-based（std::async返回后的std::future可get,wait；注底层实现可利用std::thread的native_handle）
+    条款36：
+    条款37：
+    条款38：
+    条款39：
+    条款40：
+
+第8章：Tweaks
+    条款41：
+    条款42：
