@@ -23,7 +23,7 @@ void sendsignal(char* sigvalue)
    dbus_error_init(&err);
 
    // connect to the DBUS system bus, and check for errors
-   conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+   conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
    if (dbus_error_is_set(&err)) { 
       fprintf(stderr, "Connection Error (%s)\n", err.message); 
       dbus_error_free(&err); 
@@ -93,7 +93,7 @@ void query(char* param)
    dbus_error_init(&err);
 
    // connect to the system bus and check for errors
-   conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+   conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
    if (dbus_error_is_set(&err)) { 
       fprintf(stderr, "Connection Error (%s)\n", err.message); 
       dbus_error_free(&err);
@@ -242,7 +242,7 @@ void listen()
    dbus_error_init(&err);
    
    // connect to the bus and check for errors
-   conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+   conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
    if (dbus_error_is_set(&err)) { 
       fprintf(stderr, "Connection Error (%s)\n", err.message); 
       dbus_error_free(&err); 
@@ -305,7 +305,7 @@ void receive()
    dbus_error_init(&err);
    
    // connect to the bus and check for errors
-   conn = dbus_bus_get(DBUS_BUS_SYSTEM, &err);
+   conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
    if (dbus_error_is_set(&err)) { 
       fprintf(stderr, "Connection Error (%s)\n", err.message);
       dbus_error_free(&err); 
