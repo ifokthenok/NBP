@@ -15,6 +15,7 @@ FFWrapper::FFWrapper()
     // register all formats and codecs
     av_register_all();
 
+    // temply save decoded video/audio frames
     videoFrame = av_frame_alloc();
     audioFrame = av_frame_alloc();
 }
