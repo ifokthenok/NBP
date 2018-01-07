@@ -95,6 +95,27 @@ bool FFWrapper::setVideoScale(int src_w, int src_h, AVPixelFormat src_pix_fmt,
     return true;
 }
 
+bool FFWrapper::setVideoScale(const AVFrame& frame, int dst_w, int dst_h, AVPixelFormat dst_pix_fmt) {
+    if (videoScaleContext) {
+        LOGW("FFWrapper", "videoScaleContext is not null, free it first");
+        sws_freeContext(videoScaleContext);
+    }
+    videoScaleContext = sws_getContext(
+        frame.width, frame.height, (AVPixelFormat)frame.format, 
+        dst_w, dst_h, dst_pix_fmt, 
+        SWS_BILINEAR, NULL, NULL, NULL);
+    if (!videoScaleContext) {
+        LOGE("FFWrapper", "sws_getContext failed: src_size=%dx%d, src_fmt=%s, dst_size=%dx%d, dst_fmt=%s",         
+            frame.width, frame.height, av_get_pix_fmt_name((AVPixelFormat)frame.format), 
+            dst_w, dst_h, av_get_pix_fmt_name((AVPixelFormat)dst_pix_fmt));
+        return false;
+    }  
+    LOGD("FFWrapper", "sws_getContext succeed: src_size=%dx%d, src_fmt=%s, dst_size=%dx%d, dst_fmt=%s",         
+        frame.width, frame.height, av_get_pix_fmt_name((AVPixelFormat)frame.format), 
+        dst_w, dst_h, av_get_pix_fmt_name((AVPixelFormat)dst_pix_fmt)); 
+    return true;  
+}
+
 void FFWrapper::scaleVideo(const AVFrame& frame, uint8_t** dst_data, int* dst_linesize) {
     sws_scale(videoScaleContext, (const uint8_t* const*)frame.data, 
         frame.linesize, 0, frame.height, dst_data, dst_linesize);
@@ -151,6 +172,35 @@ bool FFWrapper::setAudioResample(int64_t src_ch_layout, int src_rate, AVSampleFo
         return false;
     }
     return true;
+}
+
+bool FFWrapper::setAudioResample(const AVFrame& frame, int64_t dst_ch_layout, 
+                      int dst_rate, AVSampleFormat dst_sample_fmt) {
+    if (audioResampleContext) {
+        LOGW("FFWrapper", "audioResampleContext is not null, free it first");
+        swr_free(&audioResampleContext);
+    }
+
+    audioResampleContext = swr_alloc();
+    if (!audioResampleContext) {
+        LOGE("FFWrapper", "swr_alloc failed");
+        return false;
+    }
+    // set options
+    av_opt_set_int(audioResampleContext, "in_channel_layout",     frame.channel_layout, 0);
+    av_opt_set_int(audioResampleContext, "in_sample_rate",        frame.sample_rate, 0);
+    av_opt_set_sample_fmt(audioResampleContext, "in_sample_fmt",  (AVSampleFormat)frame.format, 0);
+    av_opt_set_int(audioResampleContext, "out_channel_layout",    dst_ch_layout, 0);
+    av_opt_set_int(audioResampleContext, "out_sample_rate",       dst_rate, 0);
+    av_opt_set_sample_fmt(audioResampleContext, "out_sample_fmt", dst_sample_fmt, 0);
+
+    // initialize the resampling context
+    if (swr_init(audioResampleContext) < 0) {
+        LOGE("FFWrapper", "swr_init failed");
+        swr_free(&audioResampleContext);
+        return false;
+    }
+    return true;                     
 }
 
 void FFWrapper::resampleAudio(const AVFrame& frame, uint8_t** dst_data, int dst_samples) {
