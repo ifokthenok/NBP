@@ -26,12 +26,15 @@ public:
     bool decodeVideo(const AVPacket& packet, AVFrame& frame, int* decoded = NULL);
     bool setVideoScale(int src_w, int src_h, AVPixelFormat src_pix_fmt,
                        int dst_w, int dst_h, AVPixelFormat dst_pix_fmt);
+    bool setVideoScale(const AVFrame& frame, int dst_w, int dst_h, AVPixelFormat dst_pix_fmt);                   
     void scaleVideo(const AVFrame& frame, uint8_t** dst_data, int* dst_linesize);
     
     // audio related
     bool decodeAudio(const AVPacket& packet, AVFrame& frame, int* decoded = NULL);
     bool setAudioResample(int64_t src_ch_layout, int src_rate, AVSampleFormat src_sample_fmt,
                           int64_t dst_ch_layout, int dst_rate, AVSampleFormat dst_sample_fmt);
+    bool setAudioResample(const AVFrame& frame, int64_t dst_ch_layout, 
+                          int dst_rate, AVSampleFormat dst_sample_fmt);
     void resampleAudio(const AVFrame& frame, uint8_t** dst_data, int dst_samples);
 
 public:
