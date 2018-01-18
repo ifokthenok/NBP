@@ -13,6 +13,22 @@ extern "C" {
 
 class FFWrapper {
 public:
+    // class utils
+    static void freePacket(AVPacket& packet);
+    static void freeFrame(AVFrame* frame);
+    static SwsContext* getVideoScale(
+        int src_w, int src_h, AVPixelFormat src_pix_fmt,
+        int dst_w, int dst_h, AVPixelFormat dst_pix_fmt);
+    static void freeVideoScale(SwsContext* videoScaleContext);
+    static void scaleVideo(SwsContext* videoScaleContext, const AVFrame* frame, 
+        uint8_t** dst_data, int* dst_linesize);
+    static SwrContext* getAudioResample(
+        int64_t src_ch_layout, int src_rate, AVSampleFormat src_sample_fmt, 
+        int64_t dst_ch_layout, int dst_rate, AVSampleFormat dst_sample_fmt);
+    static void freeAudioResample(SwrContext* audioResampleContext);
+    static void resampleAudio(SwrContext* audioResampleContext, 
+        const AVFrame* frame, uint8_t** dst_data, int dst_samples);
+public:
     FFWrapper();
     ~FFWrapper();
     bool open(const char* url);
@@ -20,22 +36,18 @@ public:
     // NOTES: in AV_TIME_BASE fractional seconds
     bool seek(int64_t timestamp);
     bool readPacket(AVPacket& packet);
-    void freePacket(AVPacket& packet);
 
     // video related
-    bool decodeVideo(const AVPacket& packet, AVFrame& frame, int* decoded = NULL);
-    bool setVideoScale(int src_w, int src_h, AVPixelFormat src_pix_fmt,
-                       int dst_w, int dst_h, AVPixelFormat dst_pix_fmt);
-    bool setVideoScale(const AVFrame& frame, int dst_w, int dst_h, AVPixelFormat dst_pix_fmt);                   
-    void scaleVideo(const AVFrame& frame, uint8_t** dst_data, int* dst_linesize);
+    bool decodeVideo(const AVPacket& packet, AVFrame** frame, int* decoded = nullptr);
+    bool setVideoScale(const AVFrame* frame, int dst_w, int dst_h, 
+        AVPixelFormat dst_pix_fmt);                   
+    void scaleVideo(const AVFrame* frame, uint8_t** dst_data, int* dst_linesize);
     
     // audio related
-    bool decodeAudio(const AVPacket& packet, AVFrame& frame, int* decoded = NULL);
-    bool setAudioResample(int64_t src_ch_layout, int src_rate, AVSampleFormat src_sample_fmt,
-                          int64_t dst_ch_layout, int dst_rate, AVSampleFormat dst_sample_fmt);
-    bool setAudioResample(const AVFrame& frame, int64_t dst_ch_layout, 
-                          int dst_rate, AVSampleFormat dst_sample_fmt);
-    void resampleAudio(const AVFrame& frame, uint8_t** dst_data, int dst_samples);
+    bool decodeAudio(const AVPacket& packet, AVFrame** frame, int* decoded = nullptr);
+    bool setAudioResample(const AVFrame* frame, int64_t dst_ch_layout, 
+        int dst_rate, AVSampleFormat dst_sample_fmt);
+    void resampleAudio(const AVFrame* frame, uint8_t** dst_data, int dst_samples);
 
 public:
     // NOTES: in AV_TIME_BASE fractional seconds
@@ -101,17 +113,17 @@ public:
 
 
 private:
-    AVFormatContext* formatContext;
+    AVFormatContext* formatContext = nullptr;
     
     // video related
-    int videoIndex;
-    AVCodecContext* videoCodecContext;
-    AVFrame* videoFrame;
-    SwsContext* videoScaleContext;
+    int videoIndex = -1;
+    AVCodecContext* videoCodecContext = nullptr;
+    AVFrame* videoFrame = nullptr;
+    SwsContext* videoScaleContext = nullptr;
 
     // audio related
-    int audioIndex;
-    AVCodecContext* audioCodecContext;
-    AVFrame* audioFrame;
-    SwrContext* audioResampleContext;
+    int audioIndex = -1;
+    AVCodecContext* audioCodecContext = nullptr;
+    AVFrame* audioFrame = nullptr;
+    SwrContext* audioResampleContext = nullptr;
 };
