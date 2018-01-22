@@ -5,16 +5,14 @@
 #include <stdio.h>
 
 enum State {
-    ERROR,
     IDLE,
     READY,
     PAUSED,
     PLAYING
 };
 
-std::string toString(State s) {
+inline std::string toString(State s) {
     const char* states[] = {
-        "ERROR",
         "IDLE", 
         "READY", 
         "PAUSED",

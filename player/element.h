@@ -4,6 +4,29 @@
 #include "clock.h"
 #include "bus.h"
 
+#define EVENT_SEEK          0x01
+#define EVENT_EOF           0x02
+
+#define BUFFER_AVPACKET     0x01
+#define BUFFER_AVFRAME      0x02
+
+struct Event {
+    Event(int id, void* data) : id(id), data(data) {}
+    Event(int id) : id(id) {}
+    Event() {}
+    int id = -1;
+    void* data = nullptr;
+};
+
+struct Buffer {
+    Buffer(int id, void* data) : id(id), data(data) {}
+    Buffer(int id) : id(id) {}
+    Buffer() {}
+    int id = -1;
+    void* data = nullptr;
+};
+
+
 struct Element {
     virtual void setBus(Bus* bus) = 0;
     
@@ -13,6 +36,6 @@ struct Element {
     virtual int setState(State state) = 0;
     virtual State getState() = 0;
     
-    virtual int sendEvent(void* event) = 0;
-    virtual int pushBuffer(void* buffer) = 0;
+    virtual int sendEvent(const Event& event) = 0;
+    virtual int pushBuffer(const Buffer& buffer) = 0;
 };
