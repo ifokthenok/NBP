@@ -322,19 +322,22 @@ bool FFWrapper::open(const char* url) {
         url, double(formatContext->start_time)/AV_TIME_BASE, double(formatContext->duration)/AV_TIME_BASE);
 
     if (videoCodecContext) {
-        LOGI("video_index=%d, pix_fmt=%s, video_size=%dx%d, start_time=%.6g, frames=%llu, fps=%.6g, refcounted=%d",
+        LOGI("video_index=%d, pix_fmt=%s, video_size=%dx%d, start_time=%.6g, duration=%.6g, frames=%llu, fps=%.6g, refcounted=%d",
             videoIndex, av_get_pix_fmt_name(videoCodecContext->pix_fmt),
             videoCodecContext->width, videoCodecContext->height,
             av_q2d(formatContext->streams[videoIndex]->time_base)*formatContext->streams[videoIndex]->start_time,
+            av_q2d(formatContext->streams[videoIndex]->time_base)*formatContext->streams[videoIndex]->duration,
             formatContext->streams[videoIndex]->nb_frames,
             av_q2d(formatContext->streams[videoIndex]->avg_frame_rate),
             videoCodecContext->refcounted_frames);
     }
     if (audioCodecContext) {
-        LOGI("audio_index=%d, sample_fmt=%s, is_planar=%d, channels=%d, sample_rate=%d, refcounted=%d",
+        LOGI("audio_index=%d, sample_fmt=%s, is_planar=%d, channels=%d, sample_rate=%d, start_time=%.6g, duration=%.6g, refcounted=%d",
             audioIndex, av_get_sample_fmt_name(audioCodecContext->sample_fmt), 
             av_sample_fmt_is_planar(audioCodecContext->sample_fmt),
             audioCodecContext->channels, audioCodecContext->sample_rate,
+            av_q2d(formatContext->streams[audioIndex]->time_base)*formatContext->streams[audioIndex]->start_time,
+            av_q2d(formatContext->streams[audioIndex]->time_base)*formatContext->streams[audioIndex]->duration,
             audioCodecContext->refcounted_frames);
     }
     return true;

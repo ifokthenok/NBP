@@ -1,34 +1,34 @@
 #include "player.h"
-
+#include "element.h"
 
 
 int Player::setSource(const char* url) {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::prepare() {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::play() {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::pause() {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::resume() {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::seek(int64_t pos) {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::getState() {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::getPosition(int64_t& pos) {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::getDuration(int64_t& duration) {
-    return FAILED;
+    return STATUS_FAILED;
 }
 int Player::getMessage(int& messagedId, void*& messsage) {
-    return FAILED;
+    return STATUS_FAILED;
 }

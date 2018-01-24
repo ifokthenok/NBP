@@ -21,6 +21,16 @@ inline std::string toString(State s) {
     return states[s];
 }
 
+inline const char* cstr(State s) {
+    const char* states[] = {
+        "IDLE", 
+        "READY", 
+        "PAUSED",
+        "PLAYING"
+    };
+    return states[s];
+}
+
 struct States {
     void setCurrent(State s) {
         std::unique_lock<std::mutex> lock(m); 

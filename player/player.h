@@ -1,12 +1,6 @@
 #pragma once
 #include "pipeline.h"
 
-enum Status {
-    FAILED = -1,
-    SUCCESS,
-    PENDING
-};
-
 class Player: public Pipeline {
 public:
     int setSource(const char* url) override;

@@ -9,7 +9,7 @@ template <typename T>
 class Queue
 {
 public:
-    Queue(size_t maxsize = 1024) : maxSize(maxsize) {}
+    Queue(size_t maxsize = 256) : maxSize(maxsize) {}
 
     bool empty() const {
         std::unique_lock<std::mutex> lock(m);
@@ -64,7 +64,7 @@ template <typename T, typename Compare = std::greater<T>>
 class PriorityQueue
 {
 public:
-    PriorityQueue(size_t maxsize = 1024, Compare compare = Compare()) 
+    PriorityQueue(size_t maxsize = 256, Compare compare = Compare()) 
         : q(compare), maxSize(maxsize) {}
 
     bool empty() const {
