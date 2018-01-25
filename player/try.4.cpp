@@ -5,6 +5,9 @@
 #include "audio_decoder.h"
 #include "video_decoder.h"
 
+#undef  LOG_TAG 
+#define LOG_TAG "main"
+
 int main(int argc, char* argv[]) {
     Player player;
     LOGD("player.play()=%d", player.play());
@@ -42,16 +45,18 @@ int main(int argc, char* argv[]) {
     demuxer.setAudioSink(&audioDecoder);
     demuxer.setVideoSink(&videoDecoder);
 
-    int status = demuxer.toReady();
-    LOGD("demuxer.toReady(): %d, state=%s", status, cstr(demuxer.getState()));
-
-    status = demuxer.toPaused();
-    LOGD("demuxer.toPaused(): %d, state=%s", status, cstr(demuxer.getState()));
-
-    status = demuxer.toReady();
-    LOGD("demuxer.toReady(): %d, state=%s", status, cstr(demuxer.getState()));
-
-    status = demuxer.toIdle();
-    LOGD("demuxer.toIdle(): %d, state=%s", status, cstr(demuxer.getState()));
+    int status = demuxer.setState(READY);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
+    status = demuxer.setState(PAUSED);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    status = demuxer.setState(PLAYING);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
+    status = demuxer.setState(PAUSED);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
+    status = demuxer.setState(READY);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
+    status = demuxer.setState(IDLE);
+    LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
     return 0;
 }

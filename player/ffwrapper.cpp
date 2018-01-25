@@ -1,6 +1,9 @@
 #include "log.h"
 #include "ffwrapper.h"
 
+#undef  LOG_TAG 
+#define LOG_TAG "FFWrapper"
+
 //
 // class utils
 //

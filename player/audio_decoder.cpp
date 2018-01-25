@@ -2,6 +2,9 @@
 #include "ffwrapper.h"
 #include "audio_decoder.h"
 
+#undef  LOG_TAG 
+#define LOG_TAG "AudioDecoder"
+
 AudioDecoder::AudioDecoder() {   
 }
 

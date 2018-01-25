@@ -2,6 +2,8 @@
 #include "ffwrapper.h"
 #include "demuxer.h"
 
+#undef  LOG_TAG 
+#define LOG_TAG "Demuxer"
 
 Demuxer::Demuxer() {   
 }
@@ -10,15 +12,56 @@ Demuxer::~Demuxer() {
 }
 
 void Demuxer::demuxing() {
-    LOGD("Demuxer::demuxing thread entered");
+    LOGD("demuxing: thread stated");
+    std::vector<AVPacket> pendingPackets;
     for (;;) {
+        // Handle events
         Event ev;
-        if (!eventQueue.pop(ev, 1000)) {
+        if (eventQueue.pop(ev)) {
+            if (ev.id == EVENT_STOP_THREAD) {
+                if (!pendingPackets.empty()) {
+                    ffWrapper->freePacket(pendingPackets.front());
+                    pendingPackets.clear();
+                }
+                LOGD("demuxing: thread exited");
+                break;
+            };
+            // TODO: handle other events
             continue;
         }
-        if (ev.id == EVENT_STOP_THREAD) {
-            LOGD("Demuxer::demuxing thread exited");
-            break;
+
+        // Read a packet from container, or resume a pending packet
+        AVPacket packet;
+        if (!pendingPackets.empty()) {
+            if (states.getCurrent() == PAUSED) {
+                LOGD("demuxing: current state is PAUSED, will sleep 10ms");
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            packet = pendingPackets.front();
+            pendingPackets.clear();
+        } else {
+            if (!ffWrapper->readPacket(packet)) {
+                // TODO: maybe EOS.
+                continue;
+            }
+        }
+
+        if (ffWrapper->isVideo(packet)) {
+            // got video packet
+            Buffer buf(BUFFER_AVPACKET, &packet);
+            if (videoSink->pushBuffer(buf) == STATUS_FAILED) {
+                LOGW("demuxing: push buffer to videoSink failed");
+                pendingPackets.push_back(packet);
+            }
+        } else if (ffWrapper->isAudio(packet)) {
+            // got audio packet
+            Buffer buf(BUFFER_AVPACKET, &packet);
+            if (audioSink->pushBuffer(buf) == STATUS_FAILED) {
+                LOGW("demuxing: push buffer to videoSink failed");
+                pendingPackets.push_back(packet);
+            }
+        } else {
+            ffWrapper->freePacket(packet);
         }
     }
 }
@@ -82,8 +125,8 @@ int Demuxer::toPaused() {
     } 
     
     if (current == PLAYING) {
-        // TODO: flash buffer etc.
-        return STATUS_FAILED;
+        states.setCurrent(PAUSED);
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toPaused failed: current state is %s", cstr(current));
@@ -91,11 +134,24 @@ int Demuxer::toPaused() {
 }
 
 int Demuxer::toPlaying() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current != PAUSED) {
+        LOGW("toPlaying: current state is PAUSED");
+        return STATUS_FAILED;
+    }
+    states.setCurrent(PLAYING);
+    return STATUS_SUCCESS;
 }
 
 int Demuxer::setState(State state) {
-    return STATUS_FAILED;
+    typedef int (Demuxer::*ToStateFun)();
+    ToStateFun toStates[] = {
+        &Demuxer::toIdle,
+        &Demuxer::toReady,
+        &Demuxer::toPaused,
+        &Demuxer::toPlaying
+    }; 
+    return (this->*toStates[state])();
 }
 
 int Demuxer::sendEvent(const Event& event) {

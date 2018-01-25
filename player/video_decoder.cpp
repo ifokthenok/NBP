@@ -2,6 +2,9 @@
 #include "ffwrapper.h"
 #include "video_decoder.h"
 
+#undef  LOG_TAG 
+#define LOG_TAG "VideoDecoder"
+
 VideoDecoder::VideoDecoder() {   
 }
 
