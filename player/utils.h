@@ -11,7 +11,7 @@ class Queue
 public:
     Queue(size_t maxsize = 256) : maxSize(maxsize) {}
 
-    bool empty() const {
+    bool empty() {
         std::unique_lock<std::mutex> lock(m);
         return q.empty();
     }
@@ -67,7 +67,7 @@ public:
     PriorityQueue(size_t maxsize = 256, Compare compare = Compare()) 
         : q(compare), maxSize(maxsize) {}
 
-    bool empty() const {
+    bool empty() {
         std::unique_lock<std::mutex> lock(m);
         return q.empty();
     }

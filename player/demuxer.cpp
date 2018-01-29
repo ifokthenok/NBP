@@ -12,7 +12,7 @@ Demuxer::~Demuxer() {
 }
 
 void Demuxer::demuxing() {
-    LOGD("demuxing: thread stated");
+    LOGD("demuxing: thread started");
     std::vector<AVPacket> pendingPackets;
     for (;;) {
         // Handle events
@@ -57,7 +57,7 @@ void Demuxer::demuxing() {
             // got audio packet
             Buffer buf(BUFFER_AVPACKET, &packet);
             if (audioSink->pushBuffer(buf) == STATUS_FAILED) {
-                LOGW("demuxing: push buffer to videoSink failed");
+                LOGW("demuxing: push buffer to audioSink failed");
                 pendingPackets.push_back(packet);
             }
         } else {

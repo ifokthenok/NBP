@@ -5,11 +5,11 @@
 #include "ffwrapper.h"
 #include "utils.h"
 
-class AudioDecoder: public Element {
+class VideoRender: public Element {
 
 public:   
-    AudioDecoder();
-    ~AudioDecoder();
+    VideoRender();
+    ~VideoRender();
 
     void setBus(Bus* bus) override {
         this->bus = bus;
@@ -34,11 +34,8 @@ public:
     void setEngine(FFWrapper* ffWrapper) {
         this->ffWrapper = ffWrapper;
     }
-    void setSource(Element* demuxer) {
-        this->demuxer = demuxer;
-    }
-    void setAudioSink(Element* audioSink) {
-        this->audioSink = audioSink;
+    void setSource(Element* videoDecoder) {
+        this->videoDecoder = videoDecoder;
     }
 
 //private:
@@ -48,21 +45,17 @@ public:
     int toPlaying();
 
 private:
-    void decoding();
-
-private:
     Clock* clock = nullptr;
     Bus* bus = nullptr;
     FFWrapper* ffWrapper = nullptr;
-    Element* demuxer = nullptr;
-    Element* audioSink = nullptr;
+    Element* videoDecoder = nullptr;
+    Element* videoSink = nullptr;
     States states;
-    std::thread decodingThread;
-    Queue<Event> eventQueue;
 
 private:
     struct BufferCompare {
-        bool operator()(const AVPacket& lPacket, const AVPacket& rPacket);
+        bool operator()(const Buffer& lBuf, const Buffer& rBuf);
     };
-    PriorityQueue<AVPacket, BufferCompare> bufferQueue;
+
+    PriorityQueue<Buffer, BufferCompare> bufferQueue;
 };

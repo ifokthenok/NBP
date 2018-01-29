@@ -5,6 +5,60 @@
 #undef  LOG_TAG 
 #define LOG_TAG "AudioDecoder"
 
+
+void AudioDecoder::decoding() {
+    LOGD("decoding: thread stated");
+    AVFrame* pendingFrame = nullptr;
+    for (;;) {
+        // Handle events
+        Event ev;
+        if (eventQueue.pop(ev)) {
+            if (ev.id == EVENT_STOP_THREAD) {
+                if (pendingFrame) {
+                    ffWrapper->freeFrame(pendingFrame);
+                }
+                while (!bufferQueue.empty()) {
+                    AVPacket p;
+                    bufferQueue.pop(p);
+                    ffWrapper->freePacket(p);
+                }
+                LOGD("demuxing: thread exited");
+                break;
+            };
+            // TODO: handle other events
+            continue;
+        }
+
+        // Handle buffers
+        AVFrame* frame = nullptr;
+        if (pendingFrame) {
+            frame = pendingFrame;
+            pendingFrame = nullptr;
+        } else {
+            AVPacket packet;
+            if (!bufferQueue.pop(packet)) {
+                if (states.getCurrent() == PAUSED) {
+                    LOGD("decoding: current state is PAUSED, will sleep 10ms");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));     
+                }
+                continue;
+            }
+            if (!ffWrapper->decodeAudio(packet, &frame, nullptr)) {
+                LOGE("decoding: decode audio error");
+                ffWrapper->freePacket(packet);
+                continue;
+            }
+            ffWrapper->freePacket(packet);
+        }
+
+        Buffer buf(BUFFER_AVFRAME, frame);
+        if (audioSink->pushBuffer(buf) == STATUS_FAILED) {
+            LOGW("decoding: push buffer to audioSink failed");
+            pendingFrame = frame;
+        }
+    }
+}
+
 AudioDecoder::AudioDecoder() {   
 }
 
@@ -12,7 +66,13 @@ AudioDecoder::~AudioDecoder() {
 }
 
 int AudioDecoder::toIdle() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current != READY) {
+        LOGW("toIdle: current state is READY");
+        return STATUS_SUCCESS;
+    }
+    states.setCurrent(IDLE);
+    return STATUS_SUCCESS;
 }
 
 int AudioDecoder::toReady() {
@@ -23,13 +83,17 @@ int AudioDecoder::toReady() {
     }
 
     if (current == IDLE) {
-        // TODO:
-        return STATUS_FAILED;
+        // TODO: other initialization
+        states.setCurrent(READY);
+        return STATUS_SUCCESS;
     } 
     
     if (current == PAUSED) {
         // TODO: such as stop threads etc.
-        return STATUS_FAILED;
+        sendEvent(EVENT_STOP_THREAD);
+        decodingThread.join();
+        states.setCurrent(READY);
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toReady failed: current state is %s", cstr(current));
@@ -44,13 +108,15 @@ int AudioDecoder::toPaused() {
     }
 
     if (current == READY) {
-        // TODO: start thread etc.
-        return STATUS_FAILED;
+        decodingThread = std::thread(&AudioDecoder::decoding, this);
+        states.setCurrent(PAUSED);
+        return STATUS_SUCCESS;
     } 
     
     if (current == PLAYING) {
         // TODO: flash buffer etc.
-        return STATUS_FAILED;
+        states.setCurrent(PAUSED);
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toPaused failed: current state is %s", cstr(current));
@@ -58,15 +124,39 @@ int AudioDecoder::toPaused() {
 }
 
 int AudioDecoder::toPlaying() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current != PAUSED) {
+        LOGW("toPlaying: current state is PAUSED");
+        return STATUS_SUCCESS;
+    }
+
+    states.setCurrent(PLAYING);
+    return STATUS_SUCCESS;
 }
 
 int AudioDecoder::setState(State state) {
-    return STATUS_FAILED;
+    typedef int (AudioDecoder::*ToStateFun)();
+    ToStateFun toStates[] = {
+        &AudioDecoder::toIdle,
+        &AudioDecoder::toReady,
+        &AudioDecoder::toPaused,
+        &AudioDecoder::toPlaying
+    }; 
+    return (this->*toStates[state])();
 }
 
 int AudioDecoder::sendEvent(const Event& event) {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current == IDLE || current == READY) {
+        LOGE("sendEvent failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+
+    if (!eventQueue.push(event)) {
+        LOGE("sendEvent failed: event queue is full, current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    return STATUS_SUCCESS;
 }
 
 
@@ -76,16 +166,14 @@ int AudioDecoder::pushBuffer(const Buffer& buffer) {
         return STATUS_FAILED;
     }
 
-    if (!bufferQueue.push(buffer)) {
+    if (!bufferQueue.push(*static_cast<AVPacket*>(buffer.data))) {
         LOGE("pushBuffer failed: buffer queue is empty");
-        return STATUS_FAILED;  
+        return STATUS_FAILED;
     }
     return STATUS_SUCCESS;
 }
 
 
-bool AudioDecoder::BufferCompare::operator()(const Buffer& lBuf, const Buffer& rBuf) {
-    AVPacket* lp = static_cast<AVPacket*>(lBuf.data);
-    AVPacket* rp = static_cast<AVPacket*>(rBuf.data);
-    return lp->dts >= rp->dts;
+bool AudioDecoder::BufferCompare::operator()(const AVPacket& lPacket, const AVPacket& rPacket) {
+    return lPacket.dts >= rPacket.dts;
 };

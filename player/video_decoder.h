@@ -1,8 +1,6 @@
 #pragma once
 
-#pragma once
-
-
+#include <thread>
 #include "element.h"
 #include "ffwrapper.h"
 #include "utils.h"
@@ -50,17 +48,21 @@ public:
     int toPlaying();
 
 private:
+    void decoding();
+
+private:
     Clock* clock = nullptr;
     Bus* bus = nullptr;
     FFWrapper* ffWrapper = nullptr;
     Element* demuxer = nullptr;
     Element* videoSink = nullptr;
     States states;
+    std::thread decodingThread;
+    Queue<Event> eventQueue;
 
 private:
     struct BufferCompare {
-        bool operator()(const Buffer& lBuf, const Buffer& rBuf);
+        bool operator()(const AVPacket& lPacket, const AVPacket& rPacket);
     };
-
-    PriorityQueue<Buffer, BufferCompare> bufferQueue;
+    PriorityQueue<AVPacket, BufferCompare> bufferQueue;
 };

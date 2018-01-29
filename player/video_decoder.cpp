@@ -5,6 +5,59 @@
 #undef  LOG_TAG 
 #define LOG_TAG "VideoDecoder"
 
+void VideoDecoder::decoding() {
+    LOGD("decoding: thread started");
+    AVFrame* pendingFrame = nullptr;
+    for (;;) {
+        // Handle events
+        Event ev;
+        if (eventQueue.pop(ev)) {
+            if (ev.id == EVENT_STOP_THREAD) {
+                if (pendingFrame) {
+                    ffWrapper->freeFrame(pendingFrame);
+                }
+                while (!bufferQueue.empty()) {
+                    AVPacket p;
+                    bufferQueue.pop(p);
+                    ffWrapper->freePacket(p);
+                }
+                LOGD("decoding: thread exited");
+                break;
+            };
+            // TODO: handle other events
+            continue;
+        }
+
+        // Handle buffers
+        AVFrame* frame = nullptr;
+        if (pendingFrame) {
+            frame = pendingFrame;
+            pendingFrame = nullptr;
+        } else {
+            AVPacket packet;
+            if (!bufferQueue.pop(packet)) {
+                if (states.getCurrent() == PAUSED) {
+                    LOGD("decoding: current state is PAUSED, will sleep 10ms");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));     
+                }
+                continue;
+            }
+            if (!ffWrapper->decodeVideo(packet, &frame, nullptr)) {
+                LOGE("decoding: decode video error");
+                ffWrapper->freePacket(packet);
+                continue;
+            }
+            ffWrapper->freePacket(packet);
+        }
+
+        Buffer buf(BUFFER_AVFRAME, frame);
+        if (videoSink->pushBuffer(buf) == STATUS_FAILED) {
+            LOGW("decoding: push buffer to videoSink failed");
+            pendingFrame = frame;
+        }
+    }
+}
+
 VideoDecoder::VideoDecoder() {   
 }
 
@@ -12,7 +65,13 @@ VideoDecoder::~VideoDecoder() {
 }
 
 int VideoDecoder::toIdle() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current != READY) {
+        LOGW("toIdle: current state is READY");
+        return STATUS_SUCCESS;
+    }
+    states.setCurrent(IDLE);
+    return STATUS_SUCCESS;
 }
 
 int VideoDecoder::toReady() {
@@ -23,13 +82,16 @@ int VideoDecoder::toReady() {
     }
 
     if (current == IDLE) {
-        // TODO:
-        return STATUS_FAILED;
+        // TODO: other initialization
+        states.setCurrent(READY);
+        return STATUS_SUCCESS;
     } 
     
     if (current == PAUSED) {
-        // TODO: such as stop threads etc.
-        return STATUS_FAILED;
+        sendEvent(EVENT_STOP_THREAD);
+        decodingThread.join();
+        states.setCurrent(READY);
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toReady failed: current state is %s", cstr(current));
@@ -44,13 +106,15 @@ int VideoDecoder::toPaused() {
     }
 
     if (current == READY) {
-        // TODO: start thread etc.
-        return STATUS_FAILED;
+        decodingThread = std::thread(&VideoDecoder::decoding, this);
+        states.setCurrent(PAUSED);
+        return STATUS_SUCCESS;
     } 
     
     if (current == PLAYING) {
         // TODO: flash buffer etc.
-        return STATUS_FAILED;
+        states.setCurrent(PAUSED);
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toPaused failed: current state is %s", cstr(current));
@@ -58,15 +122,39 @@ int VideoDecoder::toPaused() {
 }
 
 int VideoDecoder::toPlaying() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current != PAUSED) {
+        LOGW("toPlaying: current state is PAUSED");
+        return STATUS_SUCCESS;
+    }
+
+    states.setCurrent(PLAYING);
+    return STATUS_SUCCESS;
 }
 
 int VideoDecoder::setState(State state) {
-    return STATUS_FAILED;
+    typedef int (VideoDecoder::*ToStateFun)();
+    ToStateFun toStates[] = {
+        &VideoDecoder::toIdle,
+        &VideoDecoder::toReady,
+        &VideoDecoder::toPaused,
+        &VideoDecoder::toPlaying
+    }; 
+    return (this->*toStates[state])();
 }
 
 int VideoDecoder::sendEvent(const Event& event) {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current == IDLE || current == READY) {
+        LOGE("sendEvent failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+
+    if (!eventQueue.push(event)) {
+        LOGE("sendEvent failed: event queue is full, current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    return STATUS_SUCCESS;
 }
 
 
@@ -76,16 +164,14 @@ int VideoDecoder::pushBuffer(const Buffer& buffer) {
         return STATUS_FAILED;
     }
 
-    if (!bufferQueue.push(buffer)) {
+    if (!bufferQueue.push(*static_cast<AVPacket*>(buffer.data))) {
         LOGE("pushBuffer failed: buffer queue is empty");
-        return STATUS_FAILED;  
+        return STATUS_FAILED;
     }
     return STATUS_SUCCESS;
 }
 
 
-bool VideoDecoder::BufferCompare::operator()(const Buffer& lBuf, const Buffer& rBuf) {
-    AVPacket* lp = static_cast<AVPacket*>(lBuf.data);
-    AVPacket* rp = static_cast<AVPacket*>(rBuf.data);
-    return lp->dts >= rp->dts;
+bool VideoDecoder::BufferCompare::operator()(const AVPacket& lPacket, const AVPacket& rPacket) {
+    return lPacket.dts >= rPacket.dts;
 };
