@@ -4,6 +4,7 @@
 #include "element.h"
 #include "ffwrapper.h"
 #include "utils.h"
+#include "audio_device.h"
 
 class AudioRender: public Element {
 
@@ -33,6 +34,7 @@ public:
 public:
     void setEngine(FFWrapper* ffWrapper) {
         this->ffWrapper = ffWrapper;
+        audioDevice->setProperty(AUDIO_ENGIN, ffWrapper);
     }
     void setSource(Element* audioDecoder) {
         this->audioDecoder = audioDecoder;
@@ -51,6 +53,7 @@ private:
     Element* audioDecoder = nullptr;
     Element* audioSink = nullptr;
     States states;
+    AudioDevice* audioDevice = nullptr;
 
 private:
     struct BufferCompare {

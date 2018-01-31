@@ -1,17 +1,31 @@
 #include "log.h"
 #include "ffwrapper.h"
 #include "video_render.h"
+#include "video_device.h"
 
 #undef  LOG_TAG 
 #define LOG_TAG "VideoRender"
 
-VideoRender::VideoRender() {   
+VideoRender::VideoRender() {
+    videoDevice = VideoDevice::create("SurfaceDevice"); 
 }
 
 VideoRender::~VideoRender() {    
+    VideoDevice::release(videoDevice);
 }
 
 int VideoRender::toIdle() {
+    State current = states.getCurrent();
+    if (current == IDLE) {
+        LOGW("toIdle: current state is IDLE");
+        return STATUS_SUCCESS;
+    }
+    
+    if (current != READY) {
+        LOGE("toIdle failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+
     return STATUS_FAILED;
 }
 
@@ -24,12 +38,12 @@ int VideoRender::toReady() {
 
     if (current == IDLE) {
         // TODO:
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
     
     if (current == PAUSED) {
         // TODO: such as stop threads etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toReady failed: current state is %s", cstr(current));
@@ -39,18 +53,18 @@ int VideoRender::toReady() {
 int VideoRender::toPaused() {
     State current = states.getCurrent();
     if (current == PAUSED) {
-        LOGW("toReady: current state is PAUSED");
+        LOGW("toPaused: current state is PAUSED");
         return STATUS_SUCCESS;
     }
 
     if (current == READY) {
         // TODO: start thread etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
     
     if (current == PLAYING) {
         // TODO: flash buffer etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toPaused failed: current state is %s", cstr(current));
@@ -58,7 +72,16 @@ int VideoRender::toPaused() {
 }
 
 int VideoRender::toPlaying() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current == PLAYING) {
+        LOGW("toPlaying: current state is PLAYING");
+        return STATUS_SUCCESS;
+    }
+    if (current != PAUSED) {
+        LOGE("toPlaying failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    return STATUS_SUCCESS;
 }
 
 int VideoRender::setState(State state) {
@@ -83,19 +106,7 @@ int VideoRender::pushBuffer(const Buffer& buffer) {
     }
     */
     AVFrame* frame = static_cast<AVFrame*>(buffer.data);
-    static bool scale = true;
-    if (scale) {
-        ffWrapper->setVideoScale(frame, 800, 600, AV_PIX_FMT_RGB24);
-        scale = false;  
-    }
-    uint8_t* dst_data = new uint8_t[800*600*3];
-    int dst_linesize = 800*3;
-    ffWrapper->scaleVideo(frame, &dst_data, &dst_linesize);
-    ffWrapper->freeFrame(frame);
-    FILE* video_dst_file = fopen("./video_render_800x600.rgb", "ab+");
-    fwrite(dst_data, 1, 800*600*3, video_dst_file);
-    fclose(video_dst_file);
-    delete dst_data;
+    videoDevice->write(frame, sizeof(AVFrame));
     return STATUS_SUCCESS;
 }
 

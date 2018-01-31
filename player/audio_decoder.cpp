@@ -67,10 +67,16 @@ AudioDecoder::~AudioDecoder() {
 
 int AudioDecoder::toIdle() {
     State current = states.getCurrent();
-    if (current != READY) {
-        LOGW("toIdle: current state is READY");
+    if (current == IDLE) {
+        LOGW("toIdle: current state is IDLE");
         return STATUS_SUCCESS;
     }
+
+    if (current != READY) {
+        LOGE("toIdle failed: current state is %s", cstr(current));
+        return STATUS_FAILED;  
+    }
+
     states.setCurrent(IDLE);
     return STATUS_SUCCESS;
 }
@@ -125,9 +131,14 @@ int AudioDecoder::toPaused() {
 
 int AudioDecoder::toPlaying() {
     State current = states.getCurrent();
-    if (current != PAUSED) {
-        LOGW("toPlaying: current state is PAUSED");
+    if (current == PLAYING) {
+        LOGW("toPlaying: current state is PLAYING");
         return STATUS_SUCCESS;
+    }
+
+    if (current != PAUSED) {
+        LOGE("toPlaying failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
     }
 
     states.setCurrent(PLAYING);

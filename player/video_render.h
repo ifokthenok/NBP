@@ -2,6 +2,7 @@
 
 
 #include "element.h"
+#include "video_device.h"
 #include "ffwrapper.h"
 #include "utils.h"
 
@@ -33,6 +34,7 @@ public:
 public:
     void setEngine(FFWrapper* ffWrapper) {
         this->ffWrapper = ffWrapper;
+        videoDevice->setProperty(VIDEO_ENGIN, ffWrapper);
     }
     void setSource(Element* videoDecoder) {
         this->videoDecoder = videoDecoder;
@@ -49,8 +51,8 @@ private:
     Bus* bus = nullptr;
     FFWrapper* ffWrapper = nullptr;
     Element* videoDecoder = nullptr;
-    Element* videoSink = nullptr;
     States states;
+    VideoDevice* videoDevice = nullptr;
 
 private:
     struct BufferCompare {

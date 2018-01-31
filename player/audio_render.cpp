@@ -5,14 +5,25 @@
 #undef  LOG_TAG 
 #define LOG_TAG "AudioRender"
 
-AudioRender::AudioRender() {   
+AudioRender::AudioRender() {
+    audioDevice = AudioDevice::create("AudioTrackDevice");  
 }
 
-AudioRender::~AudioRender() {    
+AudioRender::~AudioRender() {
+    delete audioDevice;    
 }
 
 int AudioRender::toIdle() {
-    return STATUS_FAILED;
+    State current = states.getCurrent();
+    if (current == IDLE) {
+        LOGW("toIdle: current state is IDLE");
+        return STATUS_SUCCESS;
+    }
+    if (current != READY) {
+        LOGE("toIdle failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    return STATUS_SUCCESS;
 }
 
 int AudioRender::toReady() {
@@ -24,12 +35,12 @@ int AudioRender::toReady() {
 
     if (current == IDLE) {
         // TODO:
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
     
     if (current == PAUSED) {
         // TODO: such as stop threads etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toReady failed: current state is %s", cstr(current));
@@ -39,18 +50,18 @@ int AudioRender::toReady() {
 int AudioRender::toPaused() {
     State current = states.getCurrent();
     if (current == PAUSED) {
-        LOGW("toReady: current state is PAUSED");
+        LOGW("toPaused: current state is PAUSED");
         return STATUS_SUCCESS;
     }
 
     if (current == READY) {
         // TODO: start thread etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
     
     if (current == PLAYING) {
         // TODO: flash buffer etc.
-        return STATUS_FAILED;
+        return STATUS_SUCCESS;
     } 
 
     LOGE("toPaused failed: current state is %s", cstr(current));
@@ -81,19 +92,7 @@ int AudioRender::pushBuffer(const Buffer& buffer) {
     //     return STATUS_FAILED;  
     // }
     AVFrame* frame = static_cast<AVFrame*>(buffer.data);
-    static bool resample = true;
-    if (resample) {
-        ffWrapper->setAudioResample(frame, AV_CH_LAYOUT_STEREO, frame->sample_rate, AV_SAMPLE_FMT_S16);
-        resample = false;    
-    }
-    uint8_t* dst_data = new uint8_t[2 * 2 * frame->nb_samples];
-    int dst_samples = frame->nb_samples;
-    ffWrapper->resampleAudio(frame, &dst_data, dst_samples);
-    ffWrapper->freeFrame(frame);
-    FILE* audio_dst_file = fopen("./audio_render_s16le_ac2.pcm", "ab+");
-    fwrite(dst_data, 1, 2 * 2 * dst_samples, audio_dst_file);
-    fclose(audio_dst_file);
-    delete dst_data;
+    audioDevice->write(frame, sizeof(AVFrame));
     return STATUS_SUCCESS;
 }
 
