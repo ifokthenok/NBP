@@ -20,7 +20,7 @@ struct Clock {
         return duration_cast<microseconds>(d).count();
     }
 
-    // NOTES: base unit is milliseconds
+    // NOTES: base unit is microseconds
     virtual void setBaseTime(uint64_t baseTime) {
         base.store(baseTime);
     }

@@ -5,7 +5,7 @@
 #include "bus.h"
 
 #define EVENT_SEEK          0x01
-#define EVENT_EOF           0x02
+#define EVENT_EOS           0x02
 #define EVENT_STOP_THREAD   0x04
 
 #define BUFFER_AVPACKET     0x01

@@ -5,12 +5,52 @@
 #undef  LOG_TAG 
 #define LOG_TAG "AudioRender"
 
+void AudioRender::rendering() {
+    LOGD("rendering: thread stated");
+    AVFrame* pendingFrame = nullptr;
+    for (;;) {
+        // Handle events
+        Event ev;
+        if (eventQueue.pop(ev)) {
+            if (ev.id == EVENT_STOP_THREAD) {
+                while (!bufferQueue.empty()) {
+                    AVFrame* f = nullptr;
+                    bufferQueue.pop(f);
+                    ffWrapper->freeFrame(f);
+                }
+                LOGD("rendering: thread exited");
+                break;
+            };
+            // TODO: handle other events such as SEEK/EOS
+            continue;
+        }
+
+        // Current is PAUSE
+        if (states.getCurrent() == PAUSED) {
+            LOGD("rendering: current state is PAUSED, will sleep 10ms");
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;     
+        }
+
+        // Current is PLAYING
+        AVFrame* frame = nullptr;
+        if (!bufferQueue.pop(frame)) {
+            LOGW("rendering, buffer queue is empty");
+            continue;
+        }
+        audioDevice->write(frame, sizeof(AVFrame));
+        LOGD("rendering: clock running time is %lld", clock->runningTime()/1000);
+    }
+}
+
 AudioRender::AudioRender() {
-    audioDevice = AudioDevice::create("AudioTrackDevice");  
+    audioDevice = AudioDevice::create("AudioTrackDevice");
+    clock = new AudioDeviceClock(audioDevice); 
 }
 
 AudioRender::~AudioRender() {
-    delete audioDevice;    
+    delete clock;
+    delete audioDevice;
 }
 
 int AudioRender::toIdle() {
@@ -23,6 +63,7 @@ int AudioRender::toIdle() {
         LOGE("toIdle failed: current state is %s", cstr(current));
         return STATUS_FAILED;
     }
+    states.setCurrent(IDLE);
     return STATUS_SUCCESS;
 }
 
@@ -34,14 +75,20 @@ int AudioRender::toReady() {
     }
 
     if (current == IDLE) {
-        // TODO:
+        int audioSampleRate = ffWrapper->audioSampleRate();
+        audioDevice->setProperty(AUDIO_ENGIN, ffWrapper);
+        audioDevice->setProperty(AUDIO_SAMPLE_RATE, &audioSampleRate);
+        static_cast<AudioDeviceClock*>(clock)->setOffset(0);
+        states.setCurrent(READY);
         return STATUS_SUCCESS;
-    } 
+    }
     
     if (current == PAUSED) {
-        // TODO: such as stop threads etc.
+        sendEvent(EVENT_STOP_THREAD);
+        renderingThread.join();
+        states.setCurrent(READY);
         return STATUS_SUCCESS;
-    } 
+    }
 
     LOGE("toReady failed: current state is %s", cstr(current));
     return STATUS_FAILED;
@@ -55,12 +102,13 @@ int AudioRender::toPaused() {
     }
 
     if (current == READY) {
-        // TODO: start thread etc.
+        renderingThread = std::thread(&AudioRender::rendering, this);
+        states.setCurrent(PAUSED);
         return STATUS_SUCCESS;
     } 
     
     if (current == PLAYING) {
-        // TODO: flash buffer etc.
+        states.setCurrent(PAUSED);
         return STATUS_SUCCESS;
     } 
 
@@ -69,36 +117,58 @@ int AudioRender::toPaused() {
 }
 
 int AudioRender::toPlaying() {
-    return STATUS_FAILED;
-}
+    State current = states.getCurrent();
+    if (current == PLAYING) {
+        LOGW("toPlaying: current state is PLAYING");
+        return STATUS_SUCCESS;
+    }
+    if (current != PAUSED) {
+        LOGE("toPlaying failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
 
-int AudioRender::setState(State state) {
-    return STATUS_FAILED;
-}
-
-int AudioRender::sendEvent(const Event& event) {
-    return STATUS_FAILED;
-}
-
-
-int AudioRender::pushBuffer(const Buffer& buffer) {
-    // if (states.getCurrent() == IDLE) {
-    //     LOGE("pushBuffer failed: current state is IDLE");
-    //     return STATUS_FAILED;
-    // }
-
-    // if (!bufferQueue.push(buffer)) {
-    //     LOGE("pushBuffer failed: buffer queue is empty");
-    //     return STATUS_FAILED;  
-    // }
-    AVFrame* frame = static_cast<AVFrame*>(buffer.data);
-    audioDevice->write(frame, sizeof(AVFrame));
+    states.setCurrent(PLAYING);
     return STATUS_SUCCESS;
 }
 
+int AudioRender::setState(State state) {
+    typedef int (AudioRender::*ToStateFun)();
+    ToStateFun toStates[] = {
+        &AudioRender::toIdle,
+        &AudioRender::toReady,
+        &AudioRender::toPaused,
+        &AudioRender::toPlaying
+    }; 
+    return (this->*toStates[state])();
+}
 
-bool AudioRender::BufferCompare::operator()(const Buffer& lBuf, const Buffer& rBuf) {
-    AVFrame* lp = static_cast<AVFrame*>(lBuf.data);
-    AVFrame* rp = static_cast<AVFrame*>(rBuf.data);
-    return lp->pts >= rp->pts;
+int AudioRender::sendEvent(const Event& event) {
+    State current = states.getCurrent();
+    if (current == IDLE || current == READY) {
+        LOGE("sendEvent failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    if (!eventQueue.push(event)) {
+        LOGE("sendEvent failed: event queue is full, current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    return STATUS_SUCCESS;
+}
+
+int AudioRender::pushBuffer(const Buffer& buffer) {
+    State current = states.getCurrent();
+    if (current == IDLE || current == READY) {
+        LOGE("pushBuffer failed: current state is %s", cstr(current));
+        return STATUS_FAILED;
+    }
+    AVFrame* frame = static_cast<AVFrame*>(buffer.data);
+    if (!bufferQueue.push(frame)) {
+        LOGE("pushBuffer failed: buffer queue is full");
+        return STATUS_FAILED;  
+    }
+    return STATUS_SUCCESS;
+}
+
+bool AudioRender::BufferCompare::operator()(const AVFrame* lFrame, const AVFrame* rFrame) {
+    return lFrame->pts >= rFrame->pts;
 };

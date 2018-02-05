@@ -7,7 +7,6 @@
 #include "audio_device.h"
 
 class AudioRender: public Element {
-
 public:   
     AudioRender();
     ~AudioRender();
@@ -34,7 +33,6 @@ public:
 public:
     void setEngine(FFWrapper* ffWrapper) {
         this->ffWrapper = ffWrapper;
-        audioDevice->setProperty(AUDIO_ENGIN, ffWrapper);
     }
     void setSource(Element* audioDecoder) {
         this->audioDecoder = audioDecoder;
@@ -47,6 +45,9 @@ public:
     int toPlaying();
 
 private:
+    void rendering();
+
+private:
     Clock* clock = nullptr;
     Bus* bus = nullptr;
     FFWrapper* ffWrapper = nullptr;
@@ -54,11 +55,12 @@ private:
     Element* audioSink = nullptr;
     States states;
     AudioDevice* audioDevice = nullptr;
+    std::thread renderingThread;
+    Queue<Event> eventQueue;
 
 private:
     struct BufferCompare {
-        bool operator()(const Buffer& lBuf, const Buffer& rBuf);
+        bool operator()(const AVFrame* lFrame, const AVFrame* rFrame);
     };
-
-    PriorityQueue<Buffer, BufferCompare> bufferQueue;
+    PriorityQueue<AVFrame*, BufferCompare> bufferQueue;
 };

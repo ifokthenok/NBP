@@ -178,7 +178,7 @@ int AudioDecoder::pushBuffer(const Buffer& buffer) {
     }
 
     if (!bufferQueue.push(*static_cast<AVPacket*>(buffer.data))) {
-        LOGE("pushBuffer failed: buffer queue is empty");
+        LOGE("pushBuffer failed: buffer queue is full");
         return STATUS_FAILED;
     }
     return STATUS_SUCCESS;

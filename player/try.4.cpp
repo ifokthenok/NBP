@@ -46,6 +46,8 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(READY);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(READY);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
 
     status = demuxer.setState(PAUSED);
     LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
@@ -53,6 +55,8 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(PAUSED);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(PAUSED);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
 
     status = demuxer.setState(PLAYING);
     LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
@@ -60,6 +64,8 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(PLAYING);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(PLAYING);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
     
     std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 
@@ -69,6 +75,8 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(PAUSED);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(PAUSED);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
 
     status = demuxer.setState(READY);
     LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
@@ -76,6 +84,8 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(READY);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(READY);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
 
     status = demuxer.setState(IDLE);
     LOGD("demuxer.setState(): %d, state=%s", status, cstr(demuxer.getState()));
@@ -83,5 +93,7 @@ int main(int argc, char* argv[]) {
     LOGD("videoDecoder.setState(): %d, state=%s", status, cstr(videoDecoder.getState()));
     status = audioDecoder.setState(IDLE);
     LOGD("audioDecoder.setState(): %d, state=%s", status, cstr(audioDecoder.getState()));
+    status = audioRender.setState(IDLE);
+    LOGD("audioRender.setState(): %d, state=%s", status, cstr(audioRender.getState()));
     return 0;
 }

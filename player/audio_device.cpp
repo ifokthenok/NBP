@@ -19,19 +19,19 @@ public:
     }
 
     int  getSampleRate() override {
-        return 0;
+        return sampleRate;
     }
 
     int  getSampleFormat() override {
-        return 0;
+        return AV_SAMPLE_FMT_S16;
     }
 
     int  getChannels() override {
-        return 0;
+        return 2;
     }
 
     int  getPlaybackPosition() override {
-        return 0;
+        return playbackPosition;
     }
 
     int  write(void* buf, int buflen) override {
@@ -49,6 +49,7 @@ public:
         fwrite(dst_data, 1, 2 * 2 * dst_samples, audio_dst_file);
         fclose(audio_dst_file);
         delete dst_data;
+        playbackPosition += dst_samples;
         return 2 * 2 * dst_samples;
     }
 
@@ -65,6 +66,7 @@ public:
     }
 private:
     int sampleRate = 0;
+    int playbackPosition = 0;
     FFWrapper* ffWrapper = nullptr;
 };
 
