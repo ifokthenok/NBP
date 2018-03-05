@@ -52,7 +52,7 @@ SwrContext* FFWrapper::getAudioResample(int64_t src_ch_layout, int src_rate, AVS
     SwrContext* audioResampleContext = swr_alloc();
     if (!audioResampleContext) {
         LOGE("swr_alloc failed");
-        return false;
+        return audioResampleContext;
     }
     // set options
     av_opt_set_int(audioResampleContext, "in_channel_layout",       src_ch_layout, 0);
