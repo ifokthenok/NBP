@@ -1,5 +1,7 @@
 #include <stdio.h>
 
+#define SIZE 0x1000000
+
 struct Foo {
 
    static Foo* instance() {
@@ -8,13 +10,14 @@ struct Foo {
    }
 
    Foo() {
-      printf("Foo\n");
+      printf("Foo: data[0]=%d\n", data[0]);
    }
    ~Foo() {
-      printf("~Foo\n");
+      printf("~Foo: data[%d]=%d\n", SIZE-1, data[SIZE-1]);
    }
 
-   int data[0x100000000];
+   // Use std=c++11 option to avoid compile error
+   int data[SIZE] = {1};
 };
 
 int main()
