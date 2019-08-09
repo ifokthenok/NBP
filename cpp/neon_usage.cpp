@@ -2,7 +2,7 @@
 #include <arm_neon.h> // need to include this if you want to use intrinsics
 
 //
-// Building: rm-linux-gnueabi-g++  -mfloat-abi=softfp -mfpu=neon  neon_usage.cpp -o neon_usage
+// Building: arm-linux-gnueabi-g++  -mfloat-abi=softfp -mfpu=neon  neon_usage.cpp -o neon_usage
 //
 
 int main(){
