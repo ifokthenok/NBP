@@ -231,13 +231,11 @@ class MainWindow(QWidget):
         if 0 <= self.file_index and self.file_index < self.data.get_count():
             self.file_index = self.data.get_count() - 1 if self.file_index == 0 else self.file_index - 1
             self.file_wnd.set_current(self.file_index)
-        self.print_status()
 
     def next(self):
         if 0 <= self.file_index and self.file_index < self.data.get_count():
             self.file_index = 0 if self.file_index == self.data.get_count() - 1 else self.file_index + 1
             self.file_wnd.set_current(self.file_index)
-        self.print_status()
 
     def zoom_in(self):
         self.img_wnd.resize(self.img_wnd.size()*1.1)
