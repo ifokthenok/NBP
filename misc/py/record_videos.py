@@ -2,87 +2,132 @@ import sys
 import os
 import cv2
 import threading
+from pathlib import Path
+from PyQt5.QtWidgets import QApplication, QHBoxLayout, QWidget, QMessageBox, QPushButton, QLabel, QComboBox, QLineEdit
+from PyQt5.QtCore import Qt
 
-record_file = "record"
+record_name = "record"
 record_cmd = None
 
-def start(recorders, filename):
-	for (i, c, size, fps, writer) in recorders:
+def init_recorders():
+	recorders = []
+	for i in range(4):
+		c = cv2.VideoCapture(i)
+		if not c.isOpened():
+			return recorders
+		size = int(c.get(cv2.CAP_PROP_FRAME_WIDTH)), int(c.get(cv2.CAP_PROP_FRAME_HEIGHT))
+		fps = c.get(cv2.CAP_PROP_FPS)
+		recorders.append((i, c, size, fps, None))
+		print(f"init camera {i} ok")
+	return recorders
+
+def exit(recorders):
+	for i, c, size, fps, writer in recorders:
+		if writer is not None:
+			writer.release()
+			print(f"recording camera {i} finished")
+		c.release()
+		print(f"release camera {i} finished")
+
+def start(recorders):
+	global record_cmd, record_name
+	for i, c, size, fps, writer in recorders:
 		if writer is None:
-			print(f"start recording camera {i} to {filename}_{i}.mp4 ...")
 			format = cv2.VideoWriter.fourcc('m', 'p', '4', 'v')
-			writer = cv2.VideoWriter(f"{filename}_{i}.mp4", format, fps, size, True)
+			outfile = record_name + f"_{i}.mp4"
+			writer = cv2.VideoWriter(outfile, format, fps, size, True)
 			recorders[i] = (i, c, size, fps, writer)
+			print(f"start recording camera {i} to {outfile}")
 
 def stop(recorders):
-	for (i, c, size, fps, writer) in recorders:
+	global record_cmd
+	for i, c, size, fps, writer in recorders:
 		if writer is not None:
 			writer.release()
 			recorders[i] = (i, c, size, fps, None)
 			print(f"recording camera {i} finished")
 
-def record(recorders):
-	global record_file
-	global record_cmd
-	[cv2.namedWindow(f"camera {i}", cv2.WINDOW_NORMAL) for i in range(len(recorders))]
+
+def record():
+	global record_cmd, record_name
+	recorders = init_recorders()
 	while True:
+		if record_cmd == "exit":
+			exit(recorders)
+			return
 		if record_cmd == "start":
 			stop(recorders)
-			start(recorders, record_file)
-			record_cmd = None
+			start(recorders)
 		elif record_cmd == "stop":
 			stop(recorders)
-			record_cmd = None
-		elif record_cmd == "exit":
-			stop(recorders)
-			[cv2.destroyWindow(f"camera {i}") for i in range(len(recorders))]
-			return
-		for (i, c, size, fps, writer) in recorders:
+		record_cmd = None
+		for i, c, size, fps, writer in recorders:
 			ok, img = c.read()
 			if ok:
 				if writer is not None:
 					writer.write(img)
 				cv2.imshow(f"camera {i}", img)
-				cv2.waitKey(1)
 			else:
-				print(f"read frame from video capture {i} failed")
-				record_cmd = "exit"
-				break
+				print(f"can't read frame from camera {i}")
+		cv2.waitKey(3)
 
-def init_recorders():
-	recorders = []
-	for i in range(8):
-		c = cv2.VideoCapture(i)
-		if not c.isOpened():
-			break
-		size = int(c.get(cv2.CAP_PROP_FRAME_WIDTH)), int(c.get(cv2.CAP_PROP_FRAME_HEIGHT))
-		fps = c.get(cv2.CAP_PROP_FPS)
-		recorders.append((i, c, size, fps, None))
-	return recorders
+
+class MainWindow(QWidget):
+	def __init__(self, outdir):
+		super().__init__()
+		self.outdir = outdir
+		self.init_ui()
+	def init_ui(self):
+		self.person_lable = QLabel("Person:")
+		self.person_id = QLineEdit("0000")
+		self.action_cbx = QComboBox()
+		for action in ["Smoking", "Calling", "Blinking", "Distracting"]:
+			self.action_cbx.addItem(action)
+		self.start_btn = QPushButton("Start")
+		self.start_btn.clicked.connect(self.start)
+		self.stop_btn = QPushButton("Stop")
+		self.stop_btn.clicked.connect(self.stop)
+		top = QHBoxLayout()
+		top.addWidget(self.person_lable, 0, Qt.AlignLeft)
+		top.addWidget(self.person_id, 0, Qt.AlignLeft)
+		top.addWidget(self.action_cbx, 0, Qt.AlignLeft)
+		top.addWidget(self.start_btn, 0, Qt.AlignLeft)
+		top.addWidget(self.stop_btn, 0, Qt.AlignLeft)
+		self.setLayout(top)
+		self.setWindowTitle(" DMS Recorder")
+		self.setGeometry(320, 320, 450, 50)
+		self.setFixedHeight(50)
+	def start(self):
+		global record_cmd, record_name
+		prefix = Path(self.outdir).as_posix() + "/" + self.person_id.text()	+ "_" +  self.action_cbx.currentText()
+		filepath = Path(prefix + "_0.mp4")
+		if filepath.exists():
+			reply = QMessageBox.information(self, 'Warning',
+											f'{filepath.absolute()} already exists, overwrite it!',
+											QMessageBox.Yes | QMessageBox.No,
+											QMessageBox.No)
+			if reply == QMessageBox.Yes:
+				record_name = prefix
+				record_cmd = "start"
+		else:
+			record_name = prefix
+			record_cmd = "start"
+	def stop(self):
+		global record_cmd
+		record_cmd = "stop"
+	def closeEvent(self, event):
+		global record_cmd
+		record_cmd = "exit"
+
+def run_app(argv, outdir):
+	app = QApplication(argv)
+	window = MainWindow(outdir)
+	window.show()
+	app.exec()
 
 if __name__ == "__main__":
-	if len(sys.argv) < 2:
-		print(f"Usage: {sys.argv[0]} [out-dir]")
-		sys.exit(-1)
-	out_dir = sys.argv[1] if len(sys.argv) > 1 else os.curdir
-	recorders = init_recorders()
-	if len(recorders) == 0:
-		print("no video capture devices found")
-		sys.exit(-1)
-	record_thread = threading.Thread(target=record, args=(recorders,))
-	record_thread.start()
-	print("input comands: \n  start - start recording\n  stop - stop recording\n  exit - exit this app")
-	while True:
-		cmds = input().split()
-		cmd = cmds[0]
-		if cmd == "start" and len(cmds) == 2:
-			record_cmd = "start"
-			record_file = out_dir + "/" + cmds[1]
-		elif cmd == "stop":
-			record_cmd = "stop"
-		elif cmd == "exit":
-			record_cmd = "exit"
-			break
-		else:
-			print(f"invalid command: '{cmd}'")
-	record_thread.join()
+	outdir = sys.argv[1] if len(sys.argv) == 2 else os.curdir
+	ui_thread = threading.Thread(target=run_app, args=(sys.argv, outdir))
+	ui_thread.start()
+	record()
+	ui_thread.join()
